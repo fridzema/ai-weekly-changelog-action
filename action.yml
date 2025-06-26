@@ -495,6 +495,7 @@ runs:
         formatted_date = today.strftime(date_format)
 
         # Construct changelog content
+        nl = '\n'
         changelog_content = textwrap.dedent(f"""
         # {config['changelog_title']} - {config['week_label']} {week_num}, {year} {config['force_updated'] if force_update else ''}
 
@@ -506,12 +507,12 @@ runs:
         ## {config['user_impact']}
         {business_summary}
 
-        {"### " + config['statistics'] + ":\n" +
-        "  - " + os.getenv('LINES_ADDED', '0') + " " + config['lines_added'] + "\n" +
-        "  - " + os.getenv('LINES_DELETED', '0') + " " + config['lines_deleted'] + "\n" +
-        "  - " + os.getenv('FILES_CHANGED', '0') + " " + config['files_changed'] + "\n" if extended_analysis else ""}
+        {("### " + config['statistics'] + ":" + nl +
+        "  - " + os.getenv('LINES_ADDED', '0') + " " + config['lines_added'] + nl +
+        "  - " + os.getenv('LINES_DELETED', '0') + " " + config['lines_deleted'] + nl +
+        "  - " + os.getenv('FILES_CHANGED', '0') + " " + config['files_changed'] + nl).strip() if extended_analysis else ""}
 
-        {"### " + config['file_changes'] + ":\n" + file_changes_data + "\n" if extended_analysis and file_changes_data else ""}
+        {("### " + config['file_changes'] + ":" + nl + file_changes_data + nl).strip() if extended_analysis and file_changes_data else ""}
 
         ## {config['all_commits']} ({os.getenv('commit_count', '0')} {config['commits_label']})
         {commits_links_text}
