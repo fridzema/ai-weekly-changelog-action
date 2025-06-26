@@ -9,30 +9,92 @@ from openai import OpenAI
 import json
 
 def retry_api_call(max_retries=3, delay=2, timeout=30):
-    """Decorator to retry API calls with exponential backoff and timeout"""
+    """Decorator to retry API calls with exponential backoff, jitter, and rate limiting handling"""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            import random
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
+                    error_str = str(e).lower()
+                    
+                    # Handle rate limiting specifically
+                    if "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
+                        if attempt == max_retries - 1:
+                            print(f"❌ Rate limit exceeded after {max_retries} attempts.")
+                            print(f"💡 Suggestion: Try again in a few minutes, or consider using a different model with higher rate limits.")
+                            raise Exception(f"Rate limit exceeded: {str(e)}")
+                        
+                        # Longer wait for rate limiting with jitter
+                        wait_time = delay * (3 ** attempt) + random.uniform(1, 5)
+                        print(f"⏰ Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {wait_time:.1f}s before retry...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    # Handle authentication errors
+                    if "401" in error_str or "unauthorized" in error_str or "invalid api key" in error_str:
+                        print(f"❌ Authentication failed: {str(e)}")
+                        print(f"💡 Please check your OPENROUTER_API_KEY secret is correctly set.")
+                        print(f"💡 Verify your API key at: https://openrouter.ai/keys")
+                        raise Exception(f"Authentication error: {str(e)}")
+                    
+                    # Handle model not found errors
+                    if "404" in error_str or "model not found" in error_str or "not available" in error_str:
+                        print(f"❌ Model error: {str(e)}")
+                        print(f"💡 The model '{os.getenv('MODEL', 'openai/gpt-4o-mini')}' may not be available.")
+                        print(f"💡 Check available models at: https://openrouter.ai/models")
+                        print(f"💡 Consider using 'openai/gpt-4o-mini' or 'anthropic/claude-3-haiku' as alternatives.")
+                        raise Exception(f"Model availability error: {str(e)}")
+                    
+                    # Handle network errors
+                    if "timeout" in error_str or "connection" in error_str or "network" in error_str:
+                        if attempt == max_retries - 1:
+                            print(f"❌ Network connectivity issues persisted after {max_retries} attempts.")
+                            print(f"💡 Check your internet connection and GitHub Actions network status.")
+                            raise Exception(f"Network error: {str(e)}")
+                        
+                        wait_time = delay * (2 ** attempt) + random.uniform(0.5, 2)
+                        print(f"🔌 Network issue (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                        print(f"🔄 Retrying in {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    # Generic error handling
                     if attempt == max_retries - 1:
                         print(f"❌ Final attempt failed: {str(e)}")
+                        print(f"💡 If this persists, check the action logs and consider:")
+                        print(f"   - Reducing the days_back parameter")
+                        print(f"   - Using a different model")
+                        print(f"   - Checking OpenRouter service status")
                         raise
-                    wait_time = delay * (2 ** attempt)
+                    
+                    # Exponential backoff with jitter for other errors
+                    wait_time = delay * (2 ** attempt) + random.uniform(0.1, 1)
                     print(f"⚠️  API call failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
-                    print(f"🔄 Retrying in {wait_time}s...")
+                    print(f"🔄 Retrying in {wait_time:.1f}s...")
                     time.sleep(wait_time)
             return None
         return wrapper
     return decorator
 
-# Check if API key is present
+# Check if API key is present with detailed guidance
 api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
-    print("❌ OPENROUTER_API_KEY not found in secrets")
+    print("❌ OPENROUTER_API_KEY not found in environment")
+    print("💡 To fix this issue:")
+    print("   1. Go to your repository Settings > Secrets and variables > Actions")
+    print("   2. Click 'New repository secret'")
+    print("   3. Name: OPENROUTER_API_KEY")
+    print("   4. Value: Your API key from https://openrouter.ai/keys")
+    print("   5. Make sure your workflow uses: openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}")
     sys.exit(1)
+
+# Validate API key format (basic check)
+if not api_key.startswith('sk-or-'):
+    print("⚠️  Warning: API key doesn't match expected OpenRouter format (should start with 'sk-or-')")
+    print("💡 If you're getting authentication errors, verify your key at: https://openrouter.ai/keys")
 
 # Configure OpenAI client for OpenRouter with timeout
 client = OpenAI(
@@ -199,26 +261,73 @@ if extended_analysis:
     except Exception as e:
         print(f"⚠️  Could not read extended data: {e}")
 
-# Format commits for better readability
+# Format commits for better readability with streaming support
 commits_formatted = []
 commit_links = []
 repo_url = f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'unknown')}"
 
-for line in commits_raw.split('\n'):
-    if '|' in line:
-        parts = line.split('|')
-        if len(parts) >= 5:
-            full_hash, subject, author, date, short_hash = parts[:5]
-            commits_formatted.append(f"• {subject} ({author}, {date})")
-            commit_links.append(f"- [{short_hash}]({repo_url}/commit/{full_hash}) {subject} - {author}")
-        else:
-            commits_formatted.append(f"• {line}")
-            commit_links.append(f"- {line}")
-    else:
-        commits_formatted.append(f"• {line}")
-        commit_links.append(f"- {line}")
+def process_commits_in_chunks(commits_raw, chunk_size=50):
+    """Process commits in chunks to handle large commit sets efficiently"""
+    lines = commits_raw.strip().split('\n')
+    local_commits_formatted = []
+    local_commit_links = []
+    
+    # Process in smaller chunks to manage memory for very large sets
+    for i in range(0, len(lines), chunk_size):
+        chunk = lines[i:i + chunk_size]
+        
+        for line in chunk:
+            if '|' in line:
+                parts = line.split('|')
+                if len(parts) >= 5:
+                    full_hash, subject, author, date, short_hash = parts[:5]
+                    local_commits_formatted.append(f"• {subject} ({author}, {date})")
+                    local_commit_links.append(f"- [{short_hash}]({repo_url}/commit/{full_hash}) {subject} - {author}")
+                else:
+                    local_commits_formatted.append(f"• {line}")
+                    local_commit_links.append(f"- {line}")
+            else:
+                local_commits_formatted.append(f"• {line}")
+                local_commit_links.append(f"- {line}")
+        
+        # Progress indicator for very large sets
+        if len(lines) > 200 and i % (chunk_size * 4) == 0:
+            print(f"📊 Processed {min(i + chunk_size, len(lines))}/{len(lines)} commits...")
+    
+    return local_commits_formatted, local_commit_links
 
-commits_text = '\n'.join(commits_formatted)
+def cleanup_temp_files():
+    """Clean up temporary files to free memory"""
+    temp_files = ['commits.txt', 'commits_extended.txt', 'files_changed.txt', 'lines_added.tmp', 'lines_deleted.tmp']
+    for temp_file in temp_files:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except:
+            pass
+
+# Process commits with chunking for large sets  
+commits_formatted, commit_links = process_commits_in_chunks(commits_raw)
+total_commits = len(commits_formatted)
+
+# Handle large commit sets by summarizing in chunks
+MAX_COMMITS_PER_ANALYSIS = 100  # Reasonable limit for AI processing
+if total_commits > MAX_COMMITS_PER_ANALYSIS:
+    print(f"📊 Large commit set detected ({total_commits} commits). Using streaming approach...")
+    
+    # Take most recent commits for detailed analysis
+    recent_commits = commits_formatted[:MAX_COMMITS_PER_ANALYSIS]
+    recent_text = '\n'.join(recent_commits)
+    
+    # Create summary of remaining commits
+    remaining_count = total_commits - MAX_COMMITS_PER_ANALYSIS
+    summary_text = f"\n\n[Additional {remaining_count} commits not shown in detail - included in statistics]"
+    
+    commits_text = recent_text + summary_text
+    print(f"🔍 Analyzing most recent {MAX_COMMITS_PER_ANALYSIS} commits in detail, {remaining_count} additional commits included in stats")
+else:
+    commits_text = '\n'.join(commits_formatted)
+
 commits_links_text = '\n'.join(commit_links)
 
 # Enhanced prompts with extended data
@@ -249,14 +358,21 @@ Respond only with valid JSON.
 """).strip()
 
 @retry_api_call(max_retries=3, delay=2, timeout=30)
-def generate_combined_summary(prompt, commit_count):
+def generate_combined_summary(prompt, commit_count, is_large_set=False):
     print(f"🔄 Generating combined technical and business summaries...")
     
     # Dynamic token calculation based on commit count and analysis type
     base_tokens = 800
     tokens_per_commit = 30
     extended_bonus = 400 if extended_analysis else 0
-    max_tokens = min(2000, base_tokens + (commit_count * tokens_per_commit) + extended_bonus)
+    large_set_bonus = 200 if is_large_set else 0  # Extra tokens for large set context
+    
+    # Cap the commit-based calculation for very large sets
+    effective_commit_count = min(commit_count, MAX_COMMITS_PER_ANALYSIS)
+    max_tokens = min(2500, base_tokens + (effective_commit_count * tokens_per_commit) + extended_bonus + large_set_bonus)
+    
+    if is_large_set:
+        print(f"📝 Using enhanced token allocation ({max_tokens}) for large commit set processing")
     
     response = client.chat.completions.create(
         model=model,
@@ -275,7 +391,8 @@ def generate_combined_summary(prompt, commit_count):
 
 # Generate combined summaries with fallback
 try:
-    combined_response = generate_combined_summary(combined_prompt, len(commits_formatted))
+    is_large_commit_set = total_commits > MAX_COMMITS_PER_ANALYSIS
+    combined_response = generate_combined_summary(combined_prompt, total_commits, is_large_commit_set)
     print("✅ Combined summaries generated successfully")
     
     # Parse JSON response
@@ -409,4 +526,14 @@ try:
 
 except Exception as e:
     print(f"❌ Error writing changelog: {str(e)}")
+    print(f"💡 Common causes:")
+    print(f"   - File permissions issue")
+    print(f"   - Disk space issue")
+    print(f"   - Invalid markdown content")
+    cleanup_temp_files()
     sys.exit(1)
+
+finally:
+    # Clean up temporary files
+    cleanup_temp_files()
+    print("🧹 Cleaned up temporary files")

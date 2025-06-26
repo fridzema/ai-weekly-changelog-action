@@ -52,14 +52,14 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 50 # Fetch recent history (optimized for weekly changes)
+        fetch-depth: ${{ inputs.days_back > 30 && inputs.days_back * 2 || 100 }} # Dynamic fetch depth based on lookback period
         token: ${{ inputs.github_token }}
 
     - name: Collect commits and file changes
       id: commits
       shell: bash
       run: |
-        # Optimized git operations with consolidated filters
+        # Consolidated git operations for optimal performance
         DAYS_BACK="${{ inputs.days_back }}"
         EXTENDED="${{ inputs.extended }}"
         SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -69,36 +69,122 @@ runs:
 
         echo "Collecting commits since: $SINCE_DATE"
         
-        if [[ "$EXTENDED" == "true" ]]; then
-          echo "🔍 Performing extended analysis with consolidated git operations..."
-          # Single comprehensive git log call with all needed formats
-          git log --since="$SINCE_DATE" $GIT_FILTERS \
-            --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+        # Create cache key based on repository state and parameters
+        LATEST_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        CACHE_KEY="${LATEST_COMMIT:0:8}_${DAYS_BACK}_${EXTENDED}"
+        CACHE_DIR="/tmp/changelog_cache"
+        CACHE_FILE="$CACHE_DIR/$CACHE_KEY"
+        
+        mkdir -p "$CACHE_DIR"
+        
+        # Check cache first
+        if [[ -f "$CACHE_FILE" && -f "${CACHE_FILE}.meta" ]]; then
+          echo "📦 Using cached results for key: $CACHE_KEY"
+          source "${CACHE_FILE}.meta"
+          if [[ -f "${CACHE_FILE}_commits.txt" ]]; then
+            cp "${CACHE_FILE}_commits.txt" commits.txt
+            if [[ "$EXTENDED" == "true" && -f "${CACHE_FILE}_extended.txt" ]]; then
+              cp "${CACHE_FILE}_extended.txt" commits_extended.txt
+              [[ -f "${CACHE_FILE}_files.txt" ]] && cp "${CACHE_FILE}_files.txt" files_changed.txt
+            fi
+            echo "✅ Cache hit - skipping git operations"
+          else
+            echo "⚠️ Cache miss - incomplete cache data"
+            rm -f "$CACHE_FILE"*
+          fi
+        fi
+        
+        # If no cache hit, perform git operations
+        if [[ ! -f commits.txt ]]; then
+          echo "🔍 Performing git analysis..."
           
-          git log --since="$SINCE_DATE" $GIT_FILTERS \
-            --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt || true
+          if [[ "$EXTENDED" == "true" ]]; then
+            echo "📊 Extended analysis enabled - collecting comprehensive data..."
+            
+            # Single consolidated git command with all required data
+            git log --since="$SINCE_DATE" $GIT_FILTERS \
+              --pretty=format:'BASIC:%H|%s|%an|%ad|%h%nEXTENDED:COMMIT:%H|%s|%an|%ad|%h' \
+              --date=short --numstat --name-status 2>/dev/null | \
+            awk '
+              BEGIN { 
+                lines_added=0; lines_deleted=0; 
+                delete files; delete basic_commits; delete extended_commits;
+              }
+              /^BASIC:/ { 
+                gsub(/^BASIC:/, ""); 
+                basic_commits[++basic_count] = $0; 
+                next; 
+              }
+              /^EXTENDED:/ { 
+                gsub(/^EXTENDED:/, ""); 
+                extended_commits[++ext_count] = $0; 
+                next; 
+              }
+              /^[0-9]/ && NF==3 { 
+                lines_added += ($1 == "-" ? 0 : $1); 
+                lines_deleted += ($2 == "-" ? 0 : $2); 
+                files[$3] = 1; 
+                next; 
+              }
+              /^[ADM]\t/ { 
+                gsub(/^[ADM]\t/, ""); 
+                files[$0] = 1; 
+                next; 
+              }
+              END {
+                for(i=1; i<=basic_count; i++) print basic_commits[i] > "commits.txt";
+                for(i=1; i<=ext_count; i++) print extended_commits[i] > "commits_extended.txt";
+                for(f in files) print f > "files_changed.txt";
+                print lines_added > "lines_added.tmp";
+                print lines_deleted > "lines_deleted.tmp";
+              }
+            ' || {
+              echo "⚠️ Consolidated git command failed, falling back to separate commands..."
+              git log --since="$SINCE_DATE" $GIT_FILTERS \
+                --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+              git log --since="$SINCE_DATE" $GIT_FILTERS \
+                --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt || true
+              git log --since="$SINCE_DATE" $GIT_FILTERS \
+                --numstat --name-only --pretty=format: | \
+                awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
+            }
+            
+            LINES_ADDED=$(cat lines_added.tmp 2>/dev/null || echo "0")
+            LINES_DELETED=$(cat lines_deleted.tmp 2>/dev/null || echo "0")
+            FILES_CHANGED=$(wc -l < files_changed.txt 2>/dev/null || echo "0")
+            
+            echo "lines_added=$LINES_ADDED" >> "$GITHUB_OUTPUT"
+            echo "lines_deleted=$LINES_DELETED" >> "$GITHUB_OUTPUT"
+            echo "files_changed=$FILES_CHANGED" >> "$GITHUB_OUTPUT"
+            echo "extended_analysis=true" >> "$GITHUB_OUTPUT"
+            
+            # Cache results
+            cp commits.txt "${CACHE_FILE}_commits.txt"
+            cp commits_extended.txt "${CACHE_FILE}_extended.txt" 2>/dev/null || true
+            cp files_changed.txt "${CACHE_FILE}_files.txt" 2>/dev/null || true
+            cat > "${CACHE_FILE}.meta" << EOF
+lines_added=$LINES_ADDED
+lines_deleted=$LINES_DELETED  
+files_changed=$FILES_CHANGED
+extended_analysis=true
+EOF
+            
+            # Cleanup temp files
+            rm -f lines_added.tmp lines_deleted.tmp
+            
+          else
+            # Simple commit collection
+            git log --since="$SINCE_DATE" $GIT_FILTERS \
+              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+            echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
+            
+            # Cache simple results
+            cp commits.txt "${CACHE_FILE}_commits.txt"
+            echo "extended_analysis=false" > "${CACHE_FILE}.meta"
+          fi
           
-          # Combined numstat and name-only extraction
-          git log --since="$SINCE_DATE" $GIT_FILTERS \
-            --numstat --name-only --pretty=format: | \
-            awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
-          
-          LINES_ADDED=$(cat lines_added.tmp 2>/dev/null || echo "0")
-          LINES_DELETED=$(cat lines_deleted.tmp 2>/dev/null || echo "0")
-          FILES_CHANGED=$(wc -l < files_changed.txt 2>/dev/null || echo "0")
-          
-          # Cleanup temp files
-          rm -f lines_added.tmp lines_deleted.tmp
-          
-          echo "lines_added=$LINES_ADDED" >> "$GITHUB_OUTPUT"
-          echo "lines_deleted=$LINES_DELETED" >> "$GITHUB_OUTPUT"
-          echo "files_changed=$FILES_CHANGED" >> "$GITHUB_OUTPUT"
-          echo "extended_analysis=true" >> "$GITHUB_OUTPUT"
-        else
-          # Simple commit collection
-          git log --since="$SINCE_DATE" $GIT_FILTERS \
-            --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
-          echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
+          # Clean old cache files (keep last 5)
+          find "$CACHE_DIR" -name "*_*_*" -type f | head -n -15 | xargs rm -f 2>/dev/null || true
         fi
 
         if [[ ! -s commits.txt ]]; then
