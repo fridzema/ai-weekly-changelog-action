@@ -64,10 +64,16 @@ runs:
         EXTENDED="${{ inputs.extended }}"
         SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
         
-        # Common git filter patterns
-        GIT_FILTERS="--grep=^Merge\ branch --invert-grep --grep=^Update\ version --invert-grep --grep=^docs:\ update\ weekly\ changelog --invert-grep --no-merges"
+        # Common git filter patterns (simplified to avoid escaping issues)
+        GIT_FILTERS="--no-merges"
 
         echo "Collecting commits since: $SINCE_DATE"
+        echo "🔧 Debug: Using filters: $GIT_FILTERS"
+        
+        # Quick test to see if any commits exist at all
+        TOTAL_COMMITS=$(git log --since="$SINCE_DATE" --oneline | wc -l || echo "0")
+        FILTERED_COMMITS=$(git log --since="$SINCE_DATE" $GIT_FILTERS --oneline | wc -l || echo "0")
+        echo "📊 Debug: Total commits in period: $TOTAL_COMMITS, After filters: $FILTERED_COMMITS"
         
         # Create cache key based on repository state and parameters
         LATEST_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -101,53 +107,30 @@ runs:
           if [[ "$EXTENDED" == "true" ]]; then
             echo "📊 Extended analysis enabled - collecting comprehensive data..."
             
-            # Single consolidated git command with all required data
+            # Start with basic commit collection (always works)
+            echo "🔍 Collecting commits..."
             git log --since="$SINCE_DATE" $GIT_FILTERS \
-              --pretty=format:'BASIC:%H|%s|%an|%ad|%h%nEXTENDED:COMMIT:%H|%s|%an|%ad|%h' \
-              --date=short --numstat --name-status 2>/dev/null | \
-            awk '
-              BEGIN { 
-                lines_added=0; lines_deleted=0; 
-                delete files; delete basic_commits; delete extended_commits;
-              }
-              /^BASIC:/ { 
-                gsub(/^BASIC:/, ""); 
-                basic_commits[++basic_count] = $0; 
-                next; 
-              }
-              /^EXTENDED:/ { 
-                gsub(/^EXTENDED:/, ""); 
-                extended_commits[++ext_count] = $0; 
-                next; 
-              }
-              /^[0-9]/ && NF==3 { 
-                lines_added += ($1 == "-" ? 0 : $1); 
-                lines_deleted += ($2 == "-" ? 0 : $2); 
-                files[$3] = 1; 
-                next; 
-              }
-              /^[ADM]\t/ { 
-                gsub(/^[ADM]\t/, ""); 
-                files[$0] = 1; 
-                next; 
-              }
-              END {
-                for(i=1; i<=basic_count; i++) print basic_commits[i] > "commits.txt";
-                for(i=1; i<=ext_count; i++) print extended_commits[i] > "commits_extended.txt";
-                for(f in files) print f > "files_changed.txt";
-                print lines_added > "lines_added.tmp";
-                print lines_deleted > "lines_deleted.tmp";
-              }
-            ' || {
-              echo "⚠️ Consolidated git command failed, falling back to separate commands..."
-              git log --since="$SINCE_DATE" $GIT_FILTERS \
+              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || {
+              echo "⚠️ Git log command failed, trying without filters..."
+              git log --since="$SINCE_DATE" --no-merges \
                 --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+            }
+            
+            # Check if we got commits before proceeding with extended analysis
+            if [[ -s commits.txt ]]; then
+              echo "✅ Found commits, collecting extended data..."
+              
+              # Collect extended commit info
               git log --since="$SINCE_DATE" $GIT_FILTERS \
                 --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt || true
+              
+              # Collect statistics
               git log --since="$SINCE_DATE" $GIT_FILTERS \
                 --numstat --name-only --pretty=format: | \
                 awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
-            }
+            else
+              echo "ℹ️ No commits found, skipping extended analysis"
+            fi
             
             LINES_ADDED=$(cat lines_added.tmp 2>/dev/null || echo "0")
             LINES_DELETED=$(cat lines_deleted.tmp 2>/dev/null || echo "0")
@@ -172,8 +155,13 @@ runs:
             
           else
             # Simple commit collection
+            echo "🔍 Collecting commits (simple mode)..."
             git log --since="$SINCE_DATE" $GIT_FILTERS \
-              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || {
+              echo "⚠️ Git log command failed, trying without filters..."
+              git log --since="$SINCE_DATE" --no-merges \
+                --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+            }
             echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
             
             # Cache simple results
@@ -185,6 +173,18 @@ runs:
           find "$CACHE_DIR" -name "*_*_*" -type f | head -n -15 | xargs rm -f 2>/dev/null || true
         fi
 
+        # Debug: Show what we found
+        if [[ -f commits.txt ]]; then
+          COMMIT_COUNT=$(wc -l < commits.txt 2>/dev/null || echo "0")
+          echo "📋 Debug: commits.txt exists with $COMMIT_COUNT lines"
+          if [[ $COMMIT_COUNT -gt 0 ]]; then
+            echo "📝 Debug: First few commits:"
+            head -3 commits.txt || echo "Could not read commits.txt"
+          fi
+        else
+          echo "📋 Debug: commits.txt does not exist"
+        fi
+        
         if [[ ! -s commits.txt ]]; then
           echo "ℹ️ No commits found in the past $DAYS_BACK days."
           echo "has_commits=false" >> "$GITHUB_OUTPUT"
