@@ -1,0 +1,24 @@
+name: Auto Latest Tag
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+
+jobs:
+  update-latest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Update latest tag
+      uses: EndBug/latest-tag@latest
+      with:
+        ref: latest
+        description: Latest stable release of the Weekly Changelog Action
