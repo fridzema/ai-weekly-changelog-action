@@ -52,42 +52,63 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Fetch full git history
+        fetch-depth: 50 # Fetch recent history (optimized for weekly changes)
         token: ${{ inputs.github_token }}
 
     - name: Collect commits and file changes
       id: commits
       shell: bash
       run: |
-        # This script is the same as your original, but uses inputs from the action
+        # Optimized git operations with consolidated filters
         DAYS_BACK="${{ inputs.days_back }}"
         EXTENDED="${{ inputs.extended }}"
         SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+        
+        # Common git filter patterns
+        GIT_FILTERS="--grep=^Merge\ branch --invert-grep --grep=^Update\ version --invert-grep --grep=^docs:\ update\ weekly\ changelog --invert-grep --no-merges"
 
         echo "Collecting commits since: $SINCE_DATE"
-        git log --since="$SINCE_DATE" --pretty=format:'%H|%s|%an|%ad|%h' --date=short --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges > commits.txt || true
-
+        
         if [[ "$EXTENDED" == "true" ]]; then
-          echo "🔍 Performing extended analysis..."
-          git log --since="$SINCE_DATE" --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges > commits_extended.txt || true
-          git log --since="$SINCE_DATE" --name-only --pretty=format: --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges | grep -v '^$' | sort | uniq > files_changed.txt || true
-          LINES_ADDED=$(git log --since="$SINCE_DATE" --pretty=tformat: --numstat --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges | awk '{add+=$1} END {print add+0}')
-          LINES_DELETED=$(git log --since="$SINCE_DATE" --pretty=tformat: --numstat --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges | awk '{del+=$2} END {print del+0}')
-          FILES_CHANGED=$(cat files_changed.txt | wc -l)
+          echo "🔍 Performing extended analysis with consolidated git operations..."
+          # Single comprehensive git log call with all needed formats
+          git log --since="$SINCE_DATE" $GIT_FILTERS \
+            --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+          
+          git log --since="$SINCE_DATE" $GIT_FILTERS \
+            --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt || true
+          
+          # Combined numstat and name-only extraction
+          git log --since="$SINCE_DATE" $GIT_FILTERS \
+            --numstat --name-only --pretty=format: | \
+            awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
+          
+          LINES_ADDED=$(cat lines_added.tmp 2>/dev/null || echo "0")
+          LINES_DELETED=$(cat lines_deleted.tmp 2>/dev/null || echo "0")
+          FILES_CHANGED=$(wc -l < files_changed.txt 2>/dev/null || echo "0")
+          
+          # Cleanup temp files
+          rm -f lines_added.tmp lines_deleted.tmp
+          
           echo "lines_added=$LINES_ADDED" >> "$GITHUB_OUTPUT"
           echo "lines_deleted=$LINES_DELETED" >> "$GITHUB_OUTPUT"
           echo "files_changed=$FILES_CHANGED" >> "$GITHUB_OUTPUT"
           echo "extended_analysis=true" >> "$GITHUB_OUTPUT"
         else
+          # Simple commit collection
+          git log --since="$SINCE_DATE" $GIT_FILTERS \
+            --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
           echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
         fi
 
         if [[ ! -s commits.txt ]]; then
-          echo "No commits found in the past $DAYS_BACK days."
+          echo "ℹ️ No commits found in the past $DAYS_BACK days."
           echo "has_commits=false" >> "$GITHUB_OUTPUT"
         else
+          COMMIT_COUNT=$(wc -l < commits.txt)
+          echo "✅ Found $COMMIT_COUNT commits"
           echo "has_commits=true" >> "$GITHUB_OUTPUT"
-          echo "commit_count=$(wc -l < commits.txt)" >> "$GITHUB_OUTPUT"
+          echo "commit_count=$COMMIT_COUNT" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Setup Python
@@ -95,6 +116,8 @@ runs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: ${{ github.action_path }}/requirements.txt
 
     - name: Install Python dependencies
       if: steps.commits.outputs.has_commits == 'true'

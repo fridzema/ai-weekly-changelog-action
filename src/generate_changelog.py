@@ -6,9 +6,10 @@ import time
 import re
 from functools import wraps
 from openai import OpenAI
+import json
 
-def retry_api_call(max_retries=3, delay=2):
-    """Decorator to retry API calls with exponential backoff"""
+def retry_api_call(max_retries=3, delay=2, timeout=30):
+    """Decorator to retry API calls with exponential backoff and timeout"""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -33,10 +34,11 @@ if not api_key:
     print("❌ OPENROUTER_API_KEY not found in secrets")
     sys.exit(1)
 
-# Configure OpenAI client for OpenRouter
+# Configure OpenAI client for OpenRouter with timeout
 client = OpenAI(
     api_key=api_key,
-    base_url="https://openrouter.ai/api/v1"
+    base_url="https://openrouter.ai/api/v1",
+    timeout=30.0
 )
 
 model = os.getenv("MODEL", "openai/gpt-4o-mini")
@@ -227,50 +229,42 @@ if extended_analysis and extended_data:
     if file_changes_data:
         base_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
-tech_prompt = textwrap.dedent(f"""
-You are a senior software developer writing a technical changelog.
-
-Analyze these commits and create a structured technical summary:
-
-{base_context}
-
-Please provide a summary in {output_language} with:
-1. A brief introduction (1-2 sentences)
-2. Main changes by category (Features, Bugfixes, Refactoring, etc.)
-3. Technical highlights
-{"4. Impact assessment based on file changes and statistics" if extended_analysis else ""}
-
-Keep it concise but informative. Use appropriate technical terminology for the target language.
-{"Focus on the most significant changes and their technical implications." if extended_analysis else ""}
-""").strip()
-
-business_prompt = textwrap.dedent(f"""
-You are a product manager communicating updates to stakeholders and end users.
-
-Analyze these technical commits and translate them to business impact:
+# Combined prompt for both technical and business summaries
+combined_prompt = textwrap.dedent(f"""
+You are an experienced technical writer creating a weekly changelog. Analyze these commits and provide both technical and business perspectives.
 
 {base_context}
 
-Write a summary in {output_language} that is understandable for non-technical people:
-1. What do these changes mean for users?
-2. What benefits do they bring?
-3. Are there important changes that people should be aware of?
-{"4. Overall scope and significance of this week's changes" if extended_analysis else ""}
+Respond with a JSON object containing exactly two fields:
 
-Avoid jargon and technical details. Focus on value and impact.
-{"Consider the scope of changes when assessing business impact." if extended_analysis else ""}
+{{
+  "technical_summary": "A technical summary in {output_language} for developers, including: 1) Brief introduction, 2) Main changes by category (Features, Bugfixes, Refactoring, etc.), 3) Technical highlights{', 4) Impact assessment based on file changes and statistics' if extended_analysis else ''}",
+  "business_summary": "A business summary in {output_language} for stakeholders and end users, including: 1) What these changes mean for users, 2) What benefits they bring, 3) Important changes people should be aware of{', 4) Overall scope and significance of this week\'s changes' if extended_analysis else ''}"
+}}
+
+Technical summary: Use appropriate technical terminology. Keep concise but informative.{' Focus on the most significant changes and their technical implications.' if extended_analysis else ''}
+Business summary: Avoid jargon and technical details. Focus on value and impact for end users.{' Consider the scope of changes when assessing business impact.' if extended_analysis else ''}
+
+Respond only with valid JSON.
 """).strip()
 
-@retry_api_call(max_retries=3, delay=2)
-def generate_summary(prompt, description):
-    print(f"🔄 Generating {description}...")
+@retry_api_call(max_retries=3, delay=2, timeout=30)
+def generate_combined_summary(prompt, commit_count):
+    print(f"🔄 Generating combined technical and business summaries...")
+    
+    # Dynamic token calculation based on commit count and analysis type
+    base_tokens = 800
+    tokens_per_commit = 30
+    extended_bonus = 400 if extended_analysis else 0
+    max_tokens = min(2000, base_tokens + (commit_count * tokens_per_commit) + extended_bonus)
+    
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "You are an experienced writer who creates clear, concise summaries."},
+            {"role": "system", "content": "You are an experienced technical writer who creates clear, structured summaries. Always respond with valid JSON."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=1200 if extended_analysis else 1000,
+        max_tokens=max_tokens,
         temperature=0.3,
         extra_headers={
             "HTTP-Referer": f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'unknown')}",
@@ -279,19 +273,25 @@ def generate_summary(prompt, description):
     )
     return response.choices[0].message.content.strip()
 
-# Generate summaries with fallback
+# Generate combined summaries with fallback
 try:
-    tech_summary = generate_summary(tech_prompt, "technical summary")
-    print("✅ Technical summary generated successfully")
+    combined_response = generate_combined_summary(combined_prompt, len(commits_formatted))
+    print("✅ Combined summaries generated successfully")
+    
+    # Parse JSON response
+    try:
+        summaries = json.loads(combined_response)
+        tech_summary = summaries.get('technical_summary', config['fallback_tech'])
+        business_summary = summaries.get('business_summary', config['fallback_business'])
+    except json.JSONDecodeError as e:
+        print(f"⚠️  Failed to parse JSON response: {str(e)}")
+        print(f"Raw response: {combined_response[:200]}...")
+        tech_summary = config['fallback_tech']
+        business_summary = config['fallback_business']
+        
 except Exception as e:
-    print(f"⚠️  Using fallback for technical summary due to: {str(e)}")
+    print(f"⚠️  Using fallback summaries due to: {str(e)}")
     tech_summary = config['fallback_tech']
-
-try:
-    business_summary = generate_summary(business_prompt, "business summary")
-    print("✅ Business summary generated successfully")
-except Exception as e:
-    print(f"⚠️  Using fallback for business summary due to: {str(e)}")
     business_summary = config['fallback_business']
 
 # Calculate week and year
