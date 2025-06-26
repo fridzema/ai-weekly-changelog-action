@@ -52,7 +52,7 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: ${{ inputs.days_back > 30 && inputs.days_back * 2 || 100 }} # Dynamic fetch depth based on lookback period
+        fetch-depth: ${{ inputs.days_back > 30 && 200 || 100 }} # Dynamic fetch depth based on lookback period
         token: ${{ inputs.github_token }}
 
     - name: Collect commits and file changes
@@ -162,12 +162,10 @@ runs:
             cp commits.txt "${CACHE_FILE}_commits.txt"
             cp commits_extended.txt "${CACHE_FILE}_extended.txt" 2>/dev/null || true
             cp files_changed.txt "${CACHE_FILE}_files.txt" 2>/dev/null || true
-            cat > "${CACHE_FILE}.meta" << EOF
-lines_added=$LINES_ADDED
-lines_deleted=$LINES_DELETED  
-files_changed=$FILES_CHANGED
-extended_analysis=true
-EOF
+            echo "lines_added=$LINES_ADDED" > "${CACHE_FILE}.meta"
+            echo "lines_deleted=$LINES_DELETED" >> "${CACHE_FILE}.meta"
+            echo "files_changed=$FILES_CHANGED" >> "${CACHE_FILE}.meta"
+            echo "extended_analysis=true" >> "${CACHE_FILE}.meta"
             
             # Cleanup temp files
             rm -f lines_added.tmp lines_deleted.tmp
