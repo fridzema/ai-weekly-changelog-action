@@ -1,135 +1,100 @@
-name: Weekly Changelog via OpenRouter
-description: "Generate weekly changelogs using OpenRouter, summarizing commits into technical and business‑friendly updates."
+# action.yml
+name: 'Weekly Changelog via OpenRouter'
+description: 'Generates a weekly changelog from git commits using an AI model via OpenRouter and commits it to the repository.'
+author: 'fridzema'
+
 branding:
-  icon: "git-commit"
-  color: "blue"
+  icon: 'git-pull-request'
+  color: 'purple'
 
 inputs:
-  days_back:
-    description: "Number of days to look back for commits"
-    default: "7"
-  model:
-    description: "OpenRouter model (e.g. openai/gpt-4o-mini)"
-    default: "openai/gpt-4o-mini"
-  language:
-    description: "Output language for changelog"
-    default: "English"
-  force:
-    description: "Force update even if week entry already exists"
-    default: "false"
-  extended:
-    description: "Extended analysis with file changes and deeper commit inspection"
-    default: "false"
-  OPENROUTER_API_KEY:
-    description: "OpenRouter API Key"
+  openrouter_api_key:
+    description: 'API key for OpenRouter.ai'
     required: true
-
-outputs:
-  commit-count:
-    description: "Total commits processed"
-    value: ${{ steps.commits.outputs.commit_count }}
+  github_token:
+    description: 'GitHub token for checking out code and committing changes.'
+    required: true
+    default: ${{ github.token }}
+  days_back:
+    description: 'Number of days to look back for commits (1-365).'
+    required: false
+    default: '7'
+  model:
+    description: 'The OpenRouter model to use (e.g., openai/gpt-4o-mini).'
+    required: false
+    default: 'openai/gpt-4o-mini'
+  language:
+    description: 'Output language for the changelog.'
+    required: false
+    default: 'English'
+  force:
+    description: 'Force update even if a changelog entry for the current week already exists.'
+    required: false
+    default: 'false'
+  extended:
+    description: 'Enable extended analysis with file changes and deeper commit inspection.'
+    required: false
+    default: 'false'
 
 runs:
-  using: composite
+  using: "composite"
   steps:
     - name: Validate inputs
       shell: bash
       run: |
-        DAYS_BACK="${{ inputs.days_back || 7 }}"
+        DAYS_BACK="${{ inputs.days_back }}"
         if ! [[ "$DAYS_BACK" =~ ^[0-9]+$ ]] || [ "$DAYS_BACK" -gt 365 ] || [ "$DAYS_BACK" -lt 1 ]; then
-          echo "❌ Invalid days_back value: $DAYS_BACK. Must be a number between 1‑365."
+          echo "❌ Invalid days_back value: $DAYS_BACK. Must be a number between 1-365."
           exit 1
         fi
         echo "✅ Input validation passed"
-        echo "🔧 Force mode: ${{ inputs.force || 'false' }}"
-        echo "🔍 Extended mode: ${{ inputs.extended || 'false' }}"
 
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0
-        token: ${{ github.token }}
+        fetch-depth: 0 # Fetch full git history
+        token: ${{ inputs.github_token }}
 
     - name: Collect commits and file changes
       id: commits
       shell: bash
       run: |
-        DAYS_BACK="${{ inputs.days_back || 7 }}"
-        EXTENDED="${{ inputs.extended || 'false' }}"
-
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-          SINCE_DATE=$(date -v-${DAYS_BACK}d -u +"%Y-%m-%dT%H:%M:%SZ")
-        else
-          SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
-        fi
+        # This script is the same as your original, but uses inputs from the action
+        DAYS_BACK="${{ inputs.days_back }}"
+        EXTENDED="${{ inputs.extended }}"
+        SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
 
         echo "Collecting commits since: $SINCE_DATE"
-        echo "Extended analysis: $EXTENDED"
-
-        git log \
-          --since="$SINCE_DATE" \
-          --pretty=format:'%H|%s|%an|%ad|%h' \
-          --date=short \
-          --grep="^Merge branch" --invert-grep \
-          --grep="^Update version" --invert-grep \
-          --grep="^docs: update weekly changelog" --invert-grep \
-          --no-merges > commits.txt || true
+        git log --since="$SINCE_DATE" --pretty=format:'%H|%s|%an|%ad|%h' --date=short --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges > commits.txt || true
 
         if [[ "$EXTENDED" == "true" ]]; then
-          echo "🔍 Performing extended analysis…"
-
-          git log --since="$SINCE_DATE" --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' \
-            --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep \
-            --grep="^docs: update weekly changelog" --invert-grep --no-merges > commits_extended.txt || true
-
-          git log --since="$SINCE_DATE" --stat --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' \
-            --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep \
-            --grep="^docs: update weekly changelog" --invert-grep --no-merges > commits_stats.txt || true
-
-          git log --since="$SINCE_DATE" --name-only --pretty=format: \
-            --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep \
-            --grep="^docs: update weekly changelog" --invert-grep --no-merges | \
-            grep -v '^$' | sort | uniq > files_changed.txt || true
-
-          LINES_ADDED=$(git log --since="$SINCE_DATE" --pretty=tformat: --numstat \
-            --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep \
-            --grep="^docs: update weekly changelog" --invert-grep --no-merges | awk '{add+=$1} END {print add+0}')
-          LINES_DELETED=$(git log --since="$SINCE_DATE" --pretty=tformat: --numstat \
-            --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep \
-            --grep="^docs: update weekly changelog" --invert-grep --no-merges | awk '{del+=$2} END {print del+0}')
-          FILES_CHANGED=$(git log --since="$SINCE_DATE" --name-only --pretty=format: \
-            --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep \
-            --grep="^docs: update weekly changelog" --invert-grep --no-merges | grep -v '^$' | sort | uniq | wc -l)
-
-          echo "lines_added=$LINES_ADDED"   >> "$GITHUB_OUTPUT"
+          echo "🔍 Performing extended analysis..."
+          git log --since="$SINCE_DATE" --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges > commits_extended.txt || true
+          git log --since="$SINCE_DATE" --name-only --pretty=format: --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges | grep -v '^$' | sort | uniq > files_changed.txt || true
+          LINES_ADDED=$(git log --since="$SINCE_DATE" --pretty=tformat: --numstat --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges | awk '{add+=$1} END {print add+0}')
+          LINES_DELETED=$(git log --since="$SINCE_DATE" --pretty=tformat: --numstat --grep="^Merge branch" --invert-grep --grep="^Update version" --invert-grep --grep="^docs: update weekly changelog" --invert-grep --no-merges | awk '{del+=$2} END {print del+0}')
+          FILES_CHANGED=$(cat files_changed.txt | wc -l)
+          echo "lines_added=$LINES_ADDED" >> "$GITHUB_OUTPUT"
           echo "lines_deleted=$LINES_DELETED" >> "$GITHUB_OUTPUT"
           echo "files_changed=$FILES_CHANGED" >> "$GITHUB_OUTPUT"
-          echo "extended_analysis=true"      >> "$GITHUB_OUTPUT"
+          echo "extended_analysis=true" >> "$GITHUB_OUTPUT"
         else
           echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
         fi
 
         if [[ ! -s commits.txt ]]; then
-          echo "No commits found in the past $DAYS_BACK days"
+          echo "No commits found in the past $DAYS_BACK days."
           echo "has_commits=false" >> "$GITHUB_OUTPUT"
-          exit 0
+        else
+          echo "has_commits=true" >> "$GITHUB_OUTPUT"
+          echo "commit_count=$(wc -l < commits.txt)" >> "$GITHUB_OUTPUT"
         fi
-
-        echo "has_commits=true" >> "$GITHUB_OUTPUT"
-        echo "commit_count=$(wc -l < commits.txt)" >> "$GITHUB_OUTPUT"
 
     - name: Setup Python
       if: steps.commits.outputs.has_commits == 'true'
       uses: actions/setup-python@v4
       with:
-        python-version: "3.11"
-
-    - name: Cache pip dependencies
-      if: steps.commits.outputs.has_commits == 'true'
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-changelog
+        python-version: '3.11'
 
     - name: Install Python dependencies
       if: steps.commits.outputs.has_commits == 'true'
@@ -138,224 +103,54 @@ runs:
         python -m pip install --upgrade pip
         pip install "openai>=1.14,<2" requests
 
-    - name: Generate README changelog section
+    - name: Generate changelog with OpenRouter
       if: steps.commits.outputs.has_commits == 'true'
-      shell: python
+      shell: bash
       env:
-        OPENROUTER_API_KEY: ${{ inputs.OPENROUTER_API_KEY }}
-        MODEL:              ${{ inputs.model }}
-        OUTPUT_LANGUAGE:    ${{ inputs.language }}
-        FORCE_UPDATE:       ${{ inputs.force || 'false' }}
-        EXTENDED_ANALYSIS:  ${{ steps.commits.outputs.extended_analysis }}
-        LINES_ADDED:        ${{ steps.commits.outputs.lines_added }}
-        LINES_DELETED:      ${{ steps.commits.outputs.lines_deleted }}
-        FILES_CHANGED:      ${{ steps.commits.outputs.files_changed }}
-        COMMIT_COUNT:       ${{ steps.commits.outputs.commit_count }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter_api_key }}
+        MODEL: ${{ inputs.model }}
+        OUTPUT_LANGUAGE: ${{ inputs.language }}
+        FORCE_UPDATE: ${{ inputs.force }}
+        EXTENDED_ANALYSIS: ${{ steps.commits.outputs.extended_analysis }}
+        LINES_ADDED: ${{ steps.commits.outputs.lines_added }}
+        LINES_DELETED: ${{ steps.commits.outputs.lines_deleted }}
+        FILES_CHANGED: ${{ steps.commits.outputs.files_changed }}
+        GITHUB_REPOSITORY: ${{ github.repository }} # Pass repository info to the script
+      run: python3 ${{ github.action_path }}/src/generate_changelog.py
+
+    - name: Get week info
+      if: steps.commits.outputs.has_commits == 'true'
+      id: get_week
+      shell: bash
       run: |
-        import os, sys, datetime, textwrap, time
-        from functools import wraps
-        from openai import OpenAI
+        echo "week_num=$(date +%V)" >> "$GITHUB_OUTPUT"
+        echo "year=$(date +%Y)" >> "$GITHUB_OUTPUT"
 
-        def retry(max_retries=3, delay=2):
-            def decorator(fn):
-                @wraps(fn)
-                def wrapper(*args, **kwargs):
-                    for attempt in range(max_retries):
-                        try:
-                            return fn(*args, **kwargs)
-                        except Exception as exc:
-                            if attempt == max_retries - 1:
-                                raise
-                            wait = delay * (2 ** attempt)
-                            print(f"⚠️  {exc} – retrying in {wait}s…")
-                            time.sleep(wait)
-                return wrapper
-            return decorator
+    - name: Commit and push changelog
+      if: steps.commits.outputs.has_commits == 'true'
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: |
+          docs: update weekly changelog (week ${{ steps.get_week.outputs.week_num }}, ${{ steps.get_week.outputs.year }})${{ inputs.force == 'true' && ' - forced update' || '' }}
+        file_pattern: 'CHANGELOG.md'
+        commit_user_name: 'github-actions[bot]'
+        commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+        token: ${{ inputs.github_token }}
 
-        # ---- config / env ----
-        api_key            = os.environ["OPENROUTER_API_KEY"]
-        model              = os.getenv("MODEL", "openai/gpt-4o-mini")
-        lang               = os.getenv("OUTPUT_LANGUAGE", "English")
-        force              = os.getenv("FORCE_UPDATE", "false").lower() == "true"
-        extended           = os.getenv("EXTENDED_ANALYSIS", "false").lower() == "true"
-        lines_added        = os.getenv("LINES_ADDED", "0")
-        lines_deleted      = os.getenv("LINES_DELETED", "0")
-        files_changed      = os.getenv("FILES_CHANGED", "0")
-        commit_count       = os.getenv("COMMIT_COUNT", "0")
+    - name: Create summary
+      if: steps.commits.outputs.has_commits == 'true'
+      shell: bash
+      run: |
+        echo "## 📝 Weekly Changelog Generated" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commits processed:** ${{ steps.commits.outputs.commit_count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Model used:** ${{ inputs.model }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Language:** ${{ inputs.language }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Extended analysis:** ${{ inputs.extended }}" >> $GITHUB_STEP_SUMMARY
+        echo "Changelog has been updated! 🎉" >> $GITHUB_STEP_SUMMARY
 
-        client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
-
-        with open("commits.txt", "r", encoding="utf-8") as fh:
-            commits_raw = fh.read().strip()
-        if not commits_raw:
-            print("ℹ️  No commits – exiting")
-            sys.exit(0)
-
-        # ---- language strings ----
-        STR = {
-            "English": {
-                "week": "Week", "generated": "Generated on", "commits": "commits",
-                "tech": "🔧 Technical Changes", "impact": "📈 User Impact", "all": "📋 All Commits",
-                "stats": "📊 Statistics", "files": "📁 File Changes", "title": "Changelog",
-                "fallback_tech": "Technical changes were made this week. See commit details below.",
-                "fallback_bus": "Various improvements and updates were implemented this week.",
-                "added": "lines added", "deleted": "lines deleted", "fchanged": "files changed",
-                "force": "(Force Updated)"
-            },
-            "Dutch": {
-                "week": "Week", "generated": "Gegenereerd op", "commits": "commits",
-                "tech": "🔧 Technische wijzigingen", "impact": "📈 Impact voor gebruikers", "all": "📋 Alle commits",
-                "stats": "📊 Statistieken", "files": "📁 Bestandswijzigingen", "title": "Changelog",
-                "fallback_tech": "Er zijn technische wijzigingen doorgevoerd. Zie commitdetails hieronder.",
-                "fallback_bus": "Diverse verbeteringen en updates zijn deze week geïmplementeerd.",
-                "added": "regels toegevoegd", "deleted": "regels verwijderd", "fchanged": "bestanden gewijzigd",
-                "force": "(Geforceerd bijgewerkt)"
-            },
-            "German": {
-                "week": "Woche", "generated": "Generiert am", "commits": "Commits",
-                "tech": "🔧 Technische Änderungen", "impact": "📈 Auswirkungen für Benutzer", "all": "📋 Alle Commits",
-                "stats": "📊 Statistiken", "files": "📁 Dateiänderungen", "title": "Changelog",
-                "fallback_tech": "Diese Woche gab es technische Änderungen. Details siehe unten.",
-                "fallback_bus": "Verschiedene Verbesserungen und Updates wurden diese Woche implementiert.",
-                "added": "Zeilen hinzugefügt", "deleted": "Zeilen gelöscht", "fchanged": "Dateien geändert",
-                "force": "(Zwangsweise aktualisiert)"
-            },
-            "French": {
-                "week": "Semaine", "generated": "Généré le", "commits": "commits",
-                "tech": "🔧 Modifications techniques", "impact": "📈 Impact utilisateur", "all": "📋 Tous les commits",
-                "stats": "📊 Statistiques", "files": "📁 Modifications de fichiers", "title": "Journal des modifications",
-                "fallback_tech": "Des modifications techniques ont été apportées cette semaine.",
-                "fallback_bus": "Diverses améliorations et mises à jour ont été implémentées cette semaine.",
-                "added": "lignes ajoutées", "deleted": "lignes supprimées", "fchanged": "fichiers modifiés",
-                "force": "(Mise à jour forcée)"
-            },
-            "Spanish": {
-                "week": "Semana", "generated": "Generado el", "commits": "commits",
-                "tech": "🔧 Cambios técnicos", "impact": "📈 Impacto del usuario", "all": "📋 Todos los commits",
-                "stats": "📊 Estadísticas", "files": "📁 Cambios en archivos", "title": "Registro de cambios",
-                "fallback_tech": "Se realizaron cambios técnicos esta semana.",
-                "fallback_bus": "Se implementaron varias mejoras y actualizaciones esta semana.",
-                "added": "líneas agregadas", "deleted": "líneas eliminadas", "fchanged": "archivos cambiados",
-                "force": "(Actualización forzada)"
-            }
-        }.get(lang, STR["English"])
-
-        # ---- format commits ----
-        repo = os.getenv("GITHUB_REPOSITORY", "example/repo")
-        link_lines = []
-        bullet_lines = []
-        for raw in commits_raw.split('\n'):
-            if '|' in raw:
-                fh, subj, auth, date, sh = raw.split('|')[:5]
-                bullet_lines.append(f"• {subj} ({auth}, {date})")
-                link_lines.append(f"- [{sh}](https://github.com/{repo}/commit/{fh}) {subj} - {auth}")
-            else:
-                bullet_lines.append(f"• {raw}")
-                link_lines.append(f"- {raw}")
-        bullets = '\n'.join(bullet_lines)
-        links   = '\n'.join(link_lines)
-
-        context = f"Commits:\n{bullets}"
-        if extended and os.path.exists("files_changed.txt"):
-            with open("files_changed.txt", "r", encoding="utf-8") as fc:
-                flist = fc.read().strip().split('\n')
-            if flist:
-                context += "\n\nFiles changed:\n" + "\n".join(flist[:25])
-
-        dev_prompt = textwrap.dedent(f"""
-        You are a senior software engineer. Summarize these git commits in {lang} for a technical audience.
-        {context}
-        1. Short intro
-        2. Key changes grouped (Features, Fixes, Refactors…)
-        3. Highlights
-        {"4. Impact assessment" if extended else ""}
-        """).strip()
-
-        pm_prompt = textwrap.dedent(f"""
-        You are a product manager. Summarize the business impact of these commits in {lang} for non‑technical stakeholders.
-        {context}
-        1. Value to users
-        2. Notable benefits
-        3. Any risks or notices
-        {"4. Overall scope" if extended else ""}
-        """).strip()
-
-        @retry()
-        def complete(prompt):
-            rsp = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "system", "content": "You write concise, clear summaries."},
-                          {"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=1200 if extended else 800,
-                extra_headers={
-                    "HTTP-Referer": f"https://github.com/{repo}",
-                    "X-Title": "Weekly‑Changelog‑Generator"
-                }
-            )
-            return rsp.choices[0].message.content.strip()
-
-        try:
-            tech_summary = complete(dev_prompt)
-        except Exception:
-            tech_summary = STR["fallback_tech"]
-
-        try:
-            bus_summary = complete(pm_prompt)
-        except Exception:
-            bus_summary = STR["fallback_bus"]
-
-        today = datetime.date.today()
-        week  = today.isocalendar()[1]
-        date_fmt = {"English": "%m-%d-%Y", "Dutch": "%d-%m-%Y", "German": "%d.%m.%Y", "French": "%d/%m/%Y", "Spanish": "%d/%m/%Y"}.get(lang, "%m-%d-%Y")
-
-        entry = textwrap.dedent(f"""
-        ## {STR['week']} {week}, {today.year} {STR['force'] if force else ''}
-
-        *{STR['generated']} {today.strftime(date_fmt)} — {commit_count} {STR['commits']}*
-
-        ### {STR['tech']}
-        {tech_summary}
-
-        ### {STR['impact']}
-        {bus_summary}
-        {textwrap.dedent(f"""
-        ### {STR['stats']}
-        - **{lines_added}** {STR['added']}
-        - **{lines_deleted}** {STR['deleted']}
-        - **{files_changed}** {STR['fchanged']}
-        """).strip() if extended else ''}
-
-        ### {STR['all']}
-        {links}
-        ---
-        """).strip()
-
-        readme = "README.md"
-        pre, post = "", ""
-        start, end = "<!-- WEEKLY_CHANGELOG_START -->", "<!-- WEEKLY_CHANGELOG_END -->"
-
-        if os.path.exists(readme):
-            with open(readme, "r", encoding="utf-8") as fh:
-                content = fh.read()
-            if start in content and end in content:
-                pre = content.split(start)[0]
-                post = content.split(end)[1]
-            else:
-                pre = content
-        else:
-            content = ""
-
-        new_content = f"{pre}{start}\n{entry}\n{end}{post}"
-        with open(readme, "w", encoding="utf-8") as fh:
-            fh.write(new_content)
-
-        os.system("git config user.name 'github-actions[bot]'")
-        os.system("git config user.email '41898282+github-actions[bot]@users.noreply.github.com'")
-        os.system("git add README.md")
-        msg = f"docs: update weekly changelog (Week {week}, {today.year})"
-        if force:
-            msg += " - forced"
-        os.system(f"git commit -m \"{msg}\" || true")
-        os.system("git push || true")
-        print("✅ Changelog committed and pushed.")
+    - name: No commits found
+      if: steps.commits.outputs.has_commits == 'false'
+      shell: bash
+      run: |
+        echo "## ℹ️ No Changes This Week" >> $GITHUB_STEP_SUMMARY
+        echo "No commits found in the past ${{ inputs.days_back }} days. Changelog was not updated." >> $GITHUB_STEP_SUMMARY
