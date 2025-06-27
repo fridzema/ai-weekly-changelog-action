@@ -338,43 +338,118 @@ if extended_analysis and extended_data:
     if file_changes_data:
         base_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
-# Combined prompt for both technical and business summaries
+# Detailed prompts for richer analysis
 tech_extended = ', 4) Impact assessment based on file changes and statistics' if extended_analysis else ''
 business_extended = ', 4) Overall scope and significance of this week\'s changes' if extended_analysis else ''
 tech_note = ' Focus on the most significant changes and their technical implications.' if extended_analysis else ''
 business_note = ' Consider the scope of changes when assessing business impact.' if extended_analysis else ''
 
-combined_prompt = textwrap.dedent(f"""
-You are an experienced technical writer creating a weekly changelog. Analyze these commits and provide both technical and business perspectives.
+# Enhanced technical prompt for detailed analysis
+tech_prompt = textwrap.dedent(f"""
+You are a senior software developer writing a technical changelog for a development team.
+
+Analyze these commits and create a comprehensive technical summary:
 
 {base_context}
 
-Respond with a JSON object containing exactly two fields:
+Please provide a detailed technical summary in {output_language} that includes:
+
+1. **Brief Introduction** (1-2 sentences): Overview of the week's development activity
+2. **Main Changes by Category**: 
+   - **Features**: New functionality added
+   - **Bug Fixes**: Issues resolved and fixes implemented
+   - **Refactoring**: Code improvements, cleanup, and restructuring
+   - **Infrastructure/DevOps**: Build, deployment, and tooling changes
+   - **Documentation**: Updates to docs and comments
+   - **Testing**: Test additions and improvements
+3. **Technical Highlights**: Key architectural decisions, performance improvements, security enhancements
+{tech_extended and "4. **Impact Assessment**: Based on file changes and statistics, assess the scope and significance of changes" or ""}
+
+Requirements:
+- Use appropriate technical terminology for developers
+- Provide specific details about what was changed and why
+- Mention important technical decisions and their rationale
+- Include relevant technical context (frameworks, libraries, patterns used)
+- Keep it comprehensive but well-organized
+{tech_note}
+
+Write in a clear, technical style suitable for software developers.
+""").strip()
+
+# Enhanced business prompt for stakeholder communication
+business_prompt = textwrap.dedent(f"""
+You are a product manager communicating technical updates to stakeholders, end users, and business leaders.
+
+Analyze these technical commits and translate them into business impact:
+
+{base_context}
+
+Write a comprehensive business summary in {output_language} that non-technical people can understand:
+
+1. **User Experience Impact**: How do these changes affect what users see and experience?
+2. **Business Benefits**: What value do these changes bring to the organization?
+3. **Performance & Reliability**: Improvements in system performance, stability, or security
+4. **New Capabilities**: What new features or functionality are now available?
+5. **Risk Mitigation**: What problems were solved or prevented?
+{business_extended and "6. **Overall Scope**: Based on the extent of changes, assess the significance of this week's development" or ""}
+
+Requirements:
+- Avoid technical jargon and implementation details
+- Focus on benefits, outcomes, and user value
+- Explain the "why" behind changes in business terms
+- Highlight improvements to user experience, performance, or capabilities
+- Make it accessible to non-technical stakeholders
+{business_note}
+
+Write in a clear, business-focused style suitable for stakeholders and end users.
+""").strip()
+
+# Combined prompt that generates both summaries in one call for consistency
+combined_prompt = textwrap.dedent(f"""
+You are an experienced technical writer creating a comprehensive weekly changelog. Analyze these commits and provide both technical and business perspectives.
+
+{base_context}
+
+Generate detailed summaries for both technical and business audiences. Respond with a JSON object containing exactly two fields:
 
 {{
-  "technical_summary": "A technical summary in {output_language} for developers, including: 1) Brief introduction, 2) Main changes by category (Features, Bugfixes, Refactoring, etc.), 3) Technical highlights{tech_extended}",
-  "business_summary": "A business summary in {output_language} for stakeholders and end users, including: 1) What these changes mean for users, 2) What benefits they bring, 3) Important changes people should be aware of{business_extended}"
+  "technical_summary": "A comprehensive technical summary in {output_language} for developers, including: 1) Brief introduction, 2) Main changes by category (Features, Bugfixes, Refactoring, Infrastructure, etc.), 3) Technical highlights and architectural decisions{tech_extended}",
+  "business_summary": "A comprehensive business summary in {output_language} for stakeholders and end users, including: 1) User experience impact, 2) Business benefits and value, 3) Performance and reliability improvements, 4) New capabilities, 5) Risk mitigation{business_extended}"
 }}
 
-Technical summary: Use appropriate technical terminology. Keep concise but informative.{tech_note}
-Business summary: Avoid jargon and technical details. Focus on value and impact for end users.{business_note}
+Technical Summary Requirements:
+- Use appropriate technical terminology for developers
+- Provide specific details about what was changed and why
+- Mention important technical decisions and their rationale
+- Include relevant technical context (frameworks, libraries, patterns used)
+- Organize by categories: Features, Bug Fixes, Refactoring, Infrastructure, Documentation, Testing
+- Keep it comprehensive but well-organized
+{tech_note}
 
-Respond only with valid JSON.
+Business Summary Requirements:
+- Avoid technical jargon and implementation details
+- Focus on benefits, outcomes, and user value
+- Explain the "why" behind changes in business terms
+- Highlight improvements to user experience, performance, or capabilities
+- Make it accessible to non-technical stakeholders
+{business_note}
+
+Respond only with valid JSON. Make both summaries detailed and informative.
 """).strip()
 
 @retry_api_call(max_retries=3, delay=2, timeout=30)
 def generate_combined_summary(prompt, commit_count, is_large_set=False):
     print(f"🔄 Generating combined technical and business summaries...")
     
-    # Dynamic token calculation based on commit count and analysis type
-    base_tokens = 800
-    tokens_per_commit = 30
-    extended_bonus = 400 if extended_analysis else 0
-    large_set_bonus = 200 if is_large_set else 0  # Extra tokens for large set context
+    # Enhanced token calculation for detailed analysis
+    base_tokens = 1200  # Increased base for detailed prompts
+    tokens_per_commit = 35  # Slightly more per commit for detailed analysis
+    extended_bonus = 600 if extended_analysis else 0  # More for extended analysis
+    large_set_bonus = 300 if is_large_set else 0  # Extra tokens for large set context
     
     # Cap the commit-based calculation for very large sets
     effective_commit_count = min(commit_count, MAX_COMMITS_PER_ANALYSIS)
-    max_tokens = min(2500, base_tokens + (effective_commit_count * tokens_per_commit) + extended_bonus + large_set_bonus)
+    max_tokens = min(3500, base_tokens + (effective_commit_count * tokens_per_commit) + extended_bonus + large_set_bonus)
     
     if is_large_set:
         print(f"📝 Using enhanced token allocation ({max_tokens}) for large commit set processing")
