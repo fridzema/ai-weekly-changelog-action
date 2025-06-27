@@ -477,35 +477,35 @@ try:
         files_changed = os.getenv("FILES_CHANGED", "0")
         
         stats_section = f"""
-    ### {config['statistics']}
-    - **{lines_added}** {config['lines_added']}
-    - **{lines_deleted}** {config['lines_deleted']} 
-    - **{files_changed}** {config['files_changed']}
-    """
+### {config['statistics']}
+- **{lines_added}** {config['lines_added']}
+- **{lines_deleted}** {config['lines_deleted']} 
+- **{files_changed}** {config['files_changed']}
+"""
         
         if file_changes_data:
             stats_section += f"""
-    ### {config['file_changes']}
-    {file_changes_data}
-    """
+### {config['file_changes']}
+{file_changes_data}
+"""
 
     # Create changelog entry
     changelog_entry = textwrap.dedent(f"""
-    {week_header}{force_suffix}
+{week_header}{force_suffix}
 
-    *{config['generated_on']} {formatted_date} - {len(commits_formatted)} {config['commits_label']}*
+*{config['generated_on']} {formatted_date} - {len(commits_formatted)} {config['commits_label']}*
 
-    ### {config['tech_changes']}
-    {tech_summary}
+### {config['tech_changes']}
+{tech_summary}
 
-    ### {config['user_impact']}
-    {business_summary}
-    {stats_section}
-    ### {config['all_commits']}
-    {commits_links_text}
+### {config['user_impact']}
+{business_summary}
+{stats_section}
+### {config['all_commits']}
+{commits_links_text}
 
-    ---
-    """).strip()
+---
+""").strip()
 
     # Prepend new entry to the changelog (after header)
     lines = existing_content.split('\n')
