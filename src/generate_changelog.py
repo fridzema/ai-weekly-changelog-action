@@ -339,6 +339,11 @@ if extended_analysis and extended_data:
         base_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
 # Combined prompt for both technical and business summaries
+tech_extended = ', 4) Impact assessment based on file changes and statistics' if extended_analysis else ''
+business_extended = ', 4) Overall scope and significance of this week\'s changes' if extended_analysis else ''
+tech_note = ' Focus on the most significant changes and their technical implications.' if extended_analysis else ''
+business_note = ' Consider the scope of changes when assessing business impact.' if extended_analysis else ''
+
 combined_prompt = textwrap.dedent(f"""
 You are an experienced technical writer creating a weekly changelog. Analyze these commits and provide both technical and business perspectives.
 
@@ -347,12 +352,12 @@ You are an experienced technical writer creating a weekly changelog. Analyze the
 Respond with a JSON object containing exactly two fields:
 
 {{
-  "technical_summary": "A technical summary in {output_language} for developers, including: 1) Brief introduction, 2) Main changes by category (Features, Bugfixes, Refactoring, etc.), 3) Technical highlights{', 4) Impact assessment based on file changes and statistics' if extended_analysis else ''}",
-  "business_summary": "A business summary in {output_language} for stakeholders and end users, including: 1) What these changes mean for users, 2) What benefits they bring, 3) Important changes people should be aware of{', 4) Overall scope and significance of this week's changes' if extended_analysis else ''}"
+  "technical_summary": "A technical summary in {output_language} for developers, including: 1) Brief introduction, 2) Main changes by category (Features, Bugfixes, Refactoring, etc.), 3) Technical highlights{tech_extended}",
+  "business_summary": "A business summary in {output_language} for stakeholders and end users, including: 1) What these changes mean for users, 2) What benefits they bring, 3) Important changes people should be aware of{business_extended}"
 }}
 
-Technical summary: Use appropriate technical terminology. Keep concise but informative.{' Focus on the most significant changes and their technical implications.' if extended_analysis else ''}
-Business summary: Avoid jargon and technical details. Focus on value and impact for end users.{' Consider the scope of changes when assessing business impact.' if extended_analysis else ''}
+Technical summary: Use appropriate technical terminology. Keep concise but informative.{tech_note}
+Business summary: Avoid jargon and technical details. Focus on value and impact for end users.{business_note}
 
 Respond only with valid JSON.
 """).strip()
