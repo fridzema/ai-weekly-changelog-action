@@ -1,0 +1,38 @@
+# Example: Simple Weekly Changelog (Automatic Only)
+#
+# This is the simplest configuration - just automatic weekly runs.
+# Copy this file to your repository at: .github/workflows/changelog.yml
+#
+# Prerequisites:
+# 1. Add OPENROUTER_API_KEY to your repository secrets:
+#    Settings > Secrets and variables > Actions > New repository secret
+# 2. Ensure your workflow has write permissions (this is the default)
+
+name: Weekly Changelog
+
+on:
+  # Runs every Monday at 06:00 UTC
+  schedule:
+    - cron: '0 6 * * MON'
+
+  # Optional: Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Generate Changelog
+        uses: fridzema/ai-weekly-changelog-action@main
+        with:
+          openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          # That's it! All other parameters use sensible defaults:
+          # - days_back: 7
+          # - model: openai/gpt-5-mini
+          # - language: English
+          # - extended: false
+          # - force: false
+          # - dry_run: false

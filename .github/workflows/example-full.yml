@@ -1,0 +1,162 @@
+# Example: Weekly Changelog with Full Manual Control
+#
+# This is a complete example showing all available parameters.
+# Copy this file to your repository at: .github/workflows/changelog.yml
+#
+# Usage:
+# 1. Copy this file to .github/workflows/changelog.yml in your repository
+# 2. Add OPENROUTER_API_KEY to your repository secrets:
+#    Settings > Secrets and variables > Actions > New repository secret
+# 3. Test it: Go to Actions tab > Generate Weekly Changelog > Run workflow
+# 4. Select your desired options from the dropdowns and click "Run workflow"
+
+name: Generate Weekly Changelog
+
+on:
+  # Automatic: Runs every Monday at 06:00 UTC
+  schedule:
+    - cron: '0 6 * * MON'
+
+  # Manual: Allows running with custom parameters
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'Number of days to look back for commits (1-365)'
+        type: choice
+        required: false
+        default: '7'
+        options:
+          - '1'
+          - '7'
+          - '14'
+          - '30'
+          - '60'
+          - '90'
+
+      model:
+        description: 'OpenRouter AI model to use'
+        type: choice
+        required: false
+        default: 'openai/gpt-5-mini'
+        options:
+          - 'openai/gpt-5-mini'
+          - 'openai/gpt-4o-mini'
+          - 'anthropic/claude-3-haiku'
+          - 'anthropic/claude-3-5-sonnet'
+          - 'google/gemini-flash-1.5'
+
+      language:
+        description: 'Output language for the changelog'
+        type: choice
+        required: false
+        default: 'English'
+        options:
+          - 'English'
+          - 'Dutch'
+          - 'German'
+          - 'French'
+          - 'Spanish'
+
+      extended:
+        description: 'Enable extended analysis (file changes, statistics)'
+        type: boolean
+        required: false
+        default: false
+
+      force:
+        description: 'Force update existing week entry'
+        type: boolean
+        required: false
+        default: false
+
+      dry_run:
+        description: 'Preview without committing (test mode)'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # Required for committing the changelog
+      # Note: For dry_run only, you can reduce to: contents: read
+
+    steps:
+      - name: Generate Weekly Changelog
+        uses: fridzema/ai-weekly-changelog-action@main
+        with:
+          # ========================================
+          # REQUIRED
+          # ========================================
+          openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+
+          # ========================================
+          # OPTIONAL (with sensible defaults)
+          # ========================================
+
+          # Number of days to analyze (1-365)
+          # Default: 7 days
+          days_back: ${{ inputs.days_back || '7' }}
+
+          # AI model to use (see https://openrouter.ai/models for options)
+          # Default: 'openai/gpt-5-mini'
+          # Alternatives: 'openai/gpt-4o-mini', 'anthropic/claude-3-haiku', etc.
+          model: ${{ inputs.model || 'openai/gpt-5-mini' }}
+
+          # Output language
+          # Options: English, Dutch, German, French, Spanish
+          # Default: English
+          language: ${{ inputs.language || 'English' }}
+
+          # Extended analysis (includes file statistics and detailed changes)
+          # Default: false
+          # When true: Shows lines added/deleted, files changed
+          extended: ${{ inputs.extended || false }}
+
+          # Force update (overwrites existing week entry)
+          # Default: false
+          # When true: Regenerates changelog even if week already exists
+          force: ${{ inputs.force || false }}
+
+          # Dry run mode (preview without committing)
+          # Default: false
+          # When true: Outputs to step summary instead of committing
+          # Perfect for testing configurations and trying different models
+          dry_run: ${{ inputs.dry_run || false }}
+
+# ============================================
+# TESTING RECOMMENDATIONS
+# ============================================
+#
+# First Run (Test Mode):
+#   1. Go to Actions > Generate Weekly Changelog > Run workflow
+#   2. Set dry_run: true
+#   3. Review output in workflow summary
+#   4. Try different models to see which you prefer
+#
+# Second Run (Real):
+#   1. Set dry_run: false
+#   2. Run workflow
+#   3. Check CHANGELOG.md in your repository
+#
+# ============================================
+# TIPS
+# ============================================
+#
+# Cost Optimization:
+#   - 'openai/gpt-5-mini' is fast and cheap (~$0.001/run)
+#   - 'anthropic/claude-3-haiku' is also economical
+#   - Avoid GPT-4 models for routine changelogs (expensive)
+#
+# Extended Analysis:
+#   - Enable for monthly/quarterly reviews
+#   - Disable for weekly runs to save time
+#   - Adds ~2-4 seconds to execution time
+#
+# Languages:
+#   - All languages use the same AI model
+#   - Quality depends on model's multilingual capability
+#   - Test with dry_run to verify output quality
+#

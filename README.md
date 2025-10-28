@@ -90,6 +90,10 @@ When `dry_run` is enabled:
 
 ## Using This Action in Your Repository
 
+📄 **Quick Start**: Copy one of these example files to your repository:
+- [Simple Example](.github/workflows/example-simple.yml) - Automatic weekly runs only
+- [Full Example](.github/workflows/example-full.yml) - All parameters with manual controls
+
 ### Simple Usage (Scheduled Weekly)
 
 Create a workflow file in your repository at `.github/workflows/changelog.yml`:
@@ -127,9 +131,9 @@ jobs:
 - ✅ **DO** set `permissions: contents: write` in your job
 - ✅ **DO** add your OpenRouter API key to repository secrets
 
-### Advanced Usage (With Manual Controls)
+### Advanced Usage (Full Manual Control with All Parameters)
 
-For more control with manual workflow dispatch:
+Complete example with all available parameters exposed for manual testing:
 
 ```yaml
 name: Generate Weekly Changelog
@@ -140,7 +144,7 @@ on:
   workflow_dispatch:
     inputs:
       days_back:
-        description: 'Number of days to look back'
+        description: 'Number of days to look back for commits (1-365)'
         type: choice
         required: false
         default: '7'
@@ -150,8 +154,20 @@ on:
           - '14'
           - '30'
           - '60'
+          - '90'
+      model:
+        description: 'OpenRouter AI model to use'
+        type: choice
+        required: false
+        default: 'openai/gpt-5-mini'
+        options:
+          - 'openai/gpt-5-mini'
+          - 'openai/gpt-4o-mini'
+          - 'anthropic/claude-3-haiku'
+          - 'anthropic/claude-3-5-sonnet'
+          - 'google/gemini-flash-1.5'
       language:
-        description: 'Output language'
+        description: 'Output language for the changelog'
         type: choice
         required: false
         default: 'English'
@@ -162,7 +178,7 @@ on:
           - 'French'
           - 'Spanish'
       extended:
-        description: 'Enable extended analysis'
+        description: 'Enable extended analysis (file changes, statistics)'
         type: boolean
         required: false
         default: false
@@ -172,7 +188,7 @@ on:
         required: false
         default: false
       dry_run:
-        description: 'Preview without committing'
+        description: 'Preview without committing (test mode)'
         type: boolean
         required: false
         default: false
@@ -181,20 +197,39 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Write permission for committing
-      # For dry-run only, use: contents: read
+      contents: write # Required for committing changelog
+      # Note: For dry_run only, you can use: contents: read
 
     steps:
-      - name: Generate Changelog
+      - name: Generate Weekly Changelog
         uses: fridzema/ai-weekly-changelog-action@main
         with:
+          # Required
           openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+
+          # Optional - All parameters with fallbacks
           days_back: ${{ inputs.days_back || '7' }}
+          model: ${{ inputs.model || 'openai/gpt-5-mini' }}
           language: ${{ inputs.language || 'English' }}
           extended: ${{ inputs.extended || false }}
           force: ${{ inputs.force || false }}
           dry_run: ${{ inputs.dry_run || false }}
 ```
+
+**How to use**:
+1. Copy this file to `.github/workflows/changelog.yml` in your repository
+2. Add `OPENROUTER_API_KEY` to your repository secrets
+3. Go to **Actions** tab → **Generate Weekly Changelog** → **Run workflow**
+4. Select your desired options from the dropdowns
+5. Click **Run workflow**
+
+**Testing workflow**:
+- Start with `dry_run: true` to preview without committing
+- Try different models to see which produces better output
+- Use `extended: true` for detailed statistics and file changes
+- Use `force: true` to regenerate an existing week's entry
+
+💡 **Pro tip**: See [.github/workflows/example-full.yml](.github/workflows/example-full.yml) for a fully documented, copy-paste ready example with all parameters and detailed comments.
 
 ### Common Mistakes to Avoid
 

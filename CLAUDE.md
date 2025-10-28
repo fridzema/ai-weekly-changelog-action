@@ -75,6 +75,11 @@ pip install -r requirements.txt
 - **Explicit markdown formatting**: Prompts include structured format examples with headers, bullets, and visual hierarchy
 - Fallback summaries for API failures
 
+### Dependency Management
+- Minimal dependencies: `openai>=1.14,<2` and `requests`
+- Fast installation: ~5-10 seconds (no caching needed for 2 packages)
+- Note: Pip caching not used in composite actions due to path resolution issues
+
 ### Performance Optimizations
 - **OPTIMIZED**: Streaming support for large commit sets (>100 commits)
 - **OPTIMIZED**: Memory-efficient chunked processing for very large repositories
