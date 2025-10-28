@@ -6,7 +6,6 @@ import time
 import re
 from functools import wraps
 from openai import OpenAI
-import json
 
 def retry_api_call(max_retries=3, delay=2, timeout=30):
     """Decorator to retry API calls with exponential backoff, jitter, and rate limiting handling"""
@@ -338,126 +337,117 @@ if extended_analysis and extended_data:
     if file_changes_data:
         base_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
-# Detailed prompts for richer analysis
-tech_extended = ', 4) Impact assessment based on file changes and statistics' if extended_analysis else ''
-business_extended = ', 4) Overall scope and significance of this week\'s changes' if extended_analysis else ''
-tech_note = ' Focus on the most significant changes and their technical implications.' if extended_analysis else ''
-business_note = ' Consider the scope of changes when assessing business impact.' if extended_analysis else ''
-
-# Enhanced technical prompt for detailed analysis
+# Technical prompt with explicit markdown formatting
 tech_prompt = textwrap.dedent(f"""
 You are a senior software developer writing a technical changelog for a development team.
 
-Analyze these commits and create a comprehensive technical summary:
+Analyze these commits and create a structured technical summary in {output_language}:
 
 {base_context}
 
-Please provide a detailed technical summary in {output_language} that includes:
+Use this exact format with markdown:
 
-1. **Brief Introduction** (1-2 sentences): Overview of the week's development activity
-2. **Main Changes by Category**: 
-   - **Features**: New functionality added
-   - **Bug Fixes**: Issues resolved and fixes implemented
-   - **Refactoring**: Code improvements, cleanup, and restructuring
-   - **Infrastructure/DevOps**: Build, deployment, and tooling changes
-   - **Documentation**: Updates to docs and comments
-   - **Testing**: Test additions and improvements
-3. **Technical Highlights**: Key architectural decisions, performance improvements, security enhancements
-{tech_extended and "4. **Impact Assessment**: Based on file changes and statistics, assess the scope and significance of changes" or ""}
+### Technical Changelog Summary
+[Write 1-2 sentence overview of the week's development activity]
+
+#### Main Changes by Category
+
+**Features:**
+- [List each new feature added as a bullet point]
+- [Be specific about what functionality was added]
+
+**Bug Fixes:**
+- [List each bug fix as a bullet point]
+- [Mention what issue was resolved]
+
+**Refactoring:**
+- [List code improvements and restructuring]
+- [Explain what was cleaned up or optimized]
+
+**Infrastructure/DevOps:**
+- [List build, deployment, and tooling changes]
+
+**Documentation:**
+- [List documentation updates]
+
+**Testing:**
+- [List test additions and improvements]
+
+#### Technical Highlights
+- [Key architectural decisions made]
+- [Performance improvements implemented]
+- [Security enhancements added]
+- [Important technical context about frameworks, libraries, or patterns used]
 
 Requirements:
-- Use appropriate technical terminology for developers
+- Use markdown headers (#### for sections)
+- Use bold text (**text:**) for category labels
+- Use bullet lists (-) for all items
+- Keep it concise but informative with appropriate technical terminology
 - Provide specific details about what was changed and why
-- Mention important technical decisions and their rationale
-- Include relevant technical context (frameworks, libraries, patterns used)
-- Keep it comprehensive but well-organized
-{tech_note}
+{" - Focus on the most significant changes and their technical implications based on file statistics" if extended_analysis else ""}
 
-Write in a clear, technical style suitable for software developers.
+Write in a clear, structured format with proper markdown formatting.
 """).strip()
 
-# Enhanced business prompt for stakeholder communication
+# Business prompt with explicit markdown formatting
 business_prompt = textwrap.dedent(f"""
-You are a product manager communicating technical updates to stakeholders, end users, and business leaders.
+You are a product manager communicating updates to stakeholders and end users.
 
-Analyze these technical commits and translate them into business impact:
+Translate these technical commits into business impact in {output_language}:
 
 {base_context}
 
-Write a comprehensive business summary in {output_language} that non-technical people can understand:
+Use this exact format with markdown:
 
-1. **User Experience Impact**: How do these changes affect what users see and experience?
-2. **Business Benefits**: What value do these changes bring to the organization?
-3. **Performance & Reliability**: Improvements in system performance, stability, or security
-4. **New Capabilities**: What new features or functionality are now available?
-5. **Risk Mitigation**: What problems were solved or prevented?
-{business_extended and "6. **Overall Scope**: Based on the extent of changes, assess the significance of this week's development" or ""}
+### Summary of Recent Updates
+[Write 2-3 sentence overview for non-technical audience explaining what was accomplished this week]
+
+#### User Experience Impact
+- [How these changes affect what users see and experience]
+- [Specific improvements to interface or interactions]
+
+#### Business Benefits
+- [Value delivered to the organization]
+- [How these changes support business goals]
+
+#### Performance & Reliability
+- [Improvements in system speed or responsiveness]
+- [Enhanced stability or security]
+- [Reduced errors or issues]
+
+#### New Capabilities
+- [New features or functionality now available]
+- [What users can now do that they couldn't before]
+
+#### Important Changes to Note
+- [Breaking changes or significant updates users should be aware of]
+- [Migration steps or actions needed, if any]
 
 Requirements:
+- Use markdown headers (#### for sections)
+- Use bullet lists (-) for all items
 - Avoid technical jargon and implementation details
 - Focus on benefits, outcomes, and user value
 - Explain the "why" behind changes in business terms
-- Highlight improvements to user experience, performance, or capabilities
 - Make it accessible to non-technical stakeholders
-{business_note}
+{" - Consider the overall scope and significance based on the extent of changes" if extended_analysis else ""}
 
-Write in a clear, business-focused style suitable for stakeholders and end users.
-""").strip()
-
-# Combined prompt that generates both summaries in one call for consistency
-combined_prompt = textwrap.dedent(f"""
-You are an experienced technical writer creating a comprehensive weekly changelog. Analyze these commits and provide both technical and business perspectives.
-
-{base_context}
-
-Generate detailed summaries for both technical and business audiences. Respond with a JSON object containing exactly two fields:
-
-{{
-  "technical_summary": "A comprehensive technical summary in {output_language} for developers, including: 1) Brief introduction, 2) Main changes by category (Features, Bugfixes, Refactoring, Infrastructure, etc.), 3) Technical highlights and architectural decisions{tech_extended}",
-  "business_summary": "A comprehensive business summary in {output_language} for stakeholders and end users, including: 1) User experience impact, 2) Business benefits and value, 3) Performance and reliability improvements, 4) New capabilities, 5) Risk mitigation{business_extended}"
-}}
-
-Technical Summary Requirements:
-- Use appropriate technical terminology for developers
-- Provide specific details about what was changed and why
-- Mention important technical decisions and their rationale
-- Include relevant technical context (frameworks, libraries, patterns used)
-- Organize by categories: Features, Bug Fixes, Refactoring, Infrastructure, Documentation, Testing
-- Keep it comprehensive but well-organized
-{tech_note}
-
-Business Summary Requirements:
-- Avoid technical jargon and implementation details
-- Focus on benefits, outcomes, and user value
-- Explain the "why" behind changes in business terms
-- Highlight improvements to user experience, performance, or capabilities
-- Make it accessible to non-technical stakeholders
-{business_note}
-
-Respond only with valid JSON. Make both summaries detailed and informative.
+Write in a clear, business-focused style with proper markdown formatting.
 """).strip()
 
 @retry_api_call(max_retries=3, delay=2, timeout=30)
-def generate_combined_summary(prompt, commit_count, is_large_set=False):
-    print(f"🔄 Generating combined technical and business summaries...")
-    
-    # Enhanced token calculation for detailed analysis
-    base_tokens = 1200  # Increased base for detailed prompts
-    tokens_per_commit = 35  # Slightly more per commit for detailed analysis
-    extended_bonus = 600 if extended_analysis else 0  # More for extended analysis
-    large_set_bonus = 300 if is_large_set else 0  # Extra tokens for large set context
-    
-    # Cap the commit-based calculation for very large sets
-    effective_commit_count = min(commit_count, MAX_COMMITS_PER_ANALYSIS)
-    max_tokens = min(3500, base_tokens + (effective_commit_count * tokens_per_commit) + extended_bonus + large_set_bonus)
-    
-    if is_large_set:
-        print(f"📝 Using enhanced token allocation ({max_tokens}) for large commit set processing")
-    
+def generate_summary(prompt, description):
+    """Generate a single summary (technical or business) with proper markdown formatting"""
+    print(f"🔄 Generating {description}...")
+
+    # Token allocation: 1200 tokens per summary for better formatting space
+    max_tokens = 1200 if extended_analysis else 1000
+
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "You are an experienced technical writer who creates clear, structured summaries. Always respond with valid JSON."},
+            {"role": "system", "content": "You are an experienced technical writer who creates clear, structured summaries with proper markdown formatting."},
             {"role": "user", "content": prompt}
         ],
         max_tokens=max_tokens,
@@ -469,26 +459,19 @@ def generate_combined_summary(prompt, commit_count, is_large_set=False):
     )
     return response.choices[0].message.content.strip()
 
-# Generate combined summaries with fallback
+# Generate summaries with fallback - separate API calls for better formatting
 try:
-    is_large_commit_set = total_commits > MAX_COMMITS_PER_ANALYSIS
-    combined_response = generate_combined_summary(combined_prompt, total_commits, is_large_commit_set)
-    print("✅ Combined summaries generated successfully")
-    
-    # Parse JSON response
-    try:
-        summaries = json.loads(combined_response)
-        tech_summary = summaries.get('technical_summary', config['fallback_tech'])
-        business_summary = summaries.get('business_summary', config['fallback_business'])
-    except json.JSONDecodeError as e:
-        print(f"⚠️  Failed to parse JSON response: {str(e)}")
-        print(f"Raw response: {combined_response[:200]}...")
-        tech_summary = config['fallback_tech']
-        business_summary = config['fallback_business']
-        
+    tech_summary = generate_summary(tech_prompt, "technical summary")
+    print("✅ Technical summary generated successfully")
 except Exception as e:
-    print(f"⚠️  Using fallback summaries due to: {str(e)}")
+    print(f"⚠️  Using fallback for technical summary due to: {str(e)}")
     tech_summary = config['fallback_tech']
+
+try:
+    business_summary = generate_summary(business_prompt, "business summary")
+    print("✅ Business summary generated successfully")
+except Exception as e:
+    print(f"⚠️  Using fallback for business summary due to: {str(e)}")
     business_summary = config['fallback_business']
 
 # Calculate week and year

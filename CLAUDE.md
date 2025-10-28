@@ -70,8 +70,9 @@ pip install -r requirements.txt
 - **OPTIMIZED**: Enhanced retry logic with exponential backoff + jitter (3 attempts)
 - **OPTIMIZED**: Specific handling for rate limiting (429 errors) with longer backoff
 - **OPTIMIZED**: Comprehensive error handling with actionable guidance for auth, model, and network issues
-- Uses JSON-structured prompts for consistent AI responses
-- Dynamic token allocation based on commit count and analysis type
+- **Separate API calls**: Makes 2 independent calls (technical + business) for better formatting control
+- **Token allocation**: 1200 tokens per summary (2400 total) for comprehensive, well-formatted output
+- **Explicit markdown formatting**: Prompts include structured format examples with headers, bullets, and visual hierarchy
 - Fallback summaries for API failures
 
 ### Performance Optimizations
