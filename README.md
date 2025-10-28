@@ -88,6 +88,167 @@ When `dry_run` is enabled:
 - No commit is made to the repository
 - Perfect for testing configuration changes or different models
 
+## Using This Action in Your Repository
+
+### Simple Usage (Scheduled Weekly)
+
+Create a workflow file in your repository at `.github/workflows/changelog.yml`:
+
+```yaml
+name: Generate Weekly Changelog
+
+on:
+  schedule:
+    - cron: '0 6 * * MON' # Every Monday at 06:00 UTC
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for committing the changelog
+
+    steps:
+      - name: Generate Weekly Changelog
+        uses: fridzema/ai-weekly-changelog-action@main  # or @v1, @latest
+        with:
+          openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          # Optional: customize behavior
+          # days_back: 7
+          # model: 'openai/gpt-5-mini'
+          # language: 'English'
+          # extended: false
+          # force: false
+```
+
+**Important Notes**:
+- ✅ **DO NOT** add a separate checkout step - the action handles this internally
+- ✅ **DO NOT** pass `github_token` - the action uses it automatically from GitHub context
+- ✅ **DO** set `permissions: contents: write` in your job
+- ✅ **DO** add your OpenRouter API key to repository secrets
+
+### Advanced Usage (With Manual Controls)
+
+For more control with manual workflow dispatch:
+
+```yaml
+name: Generate Weekly Changelog
+
+on:
+  schedule:
+    - cron: '0 6 * * MON' # Every Monday at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'Number of days to look back'
+        type: choice
+        required: false
+        default: '7'
+        options:
+          - '1'
+          - '7'
+          - '14'
+          - '30'
+          - '60'
+      language:
+        description: 'Output language'
+        type: choice
+        required: false
+        default: 'English'
+        options:
+          - 'English'
+          - 'Dutch'
+          - 'German'
+          - 'French'
+          - 'Spanish'
+      extended:
+        description: 'Enable extended analysis'
+        type: boolean
+        required: false
+        default: false
+      force:
+        description: 'Force update existing week entry'
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: 'Preview without committing'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Write permission for committing
+      # For dry-run only, use: contents: read
+
+    steps:
+      - name: Generate Changelog
+        uses: fridzema/ai-weekly-changelog-action@main
+        with:
+          openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          days_back: ${{ inputs.days_back || '7' }}
+          language: ${{ inputs.language || 'English' }}
+          extended: ${{ inputs.extended || false }}
+          force: ${{ inputs.force || false }}
+          dry_run: ${{ inputs.dry_run || false }}
+```
+
+### Common Mistakes to Avoid
+
+❌ **Don't do this** (redundant checkout):
+```yaml
+steps:
+  - uses: actions/checkout@v4  # ← NOT NEEDED - Action does this internally
+  - uses: fridzema/ai-weekly-changelog-action@main
+    with:
+      openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+```
+
+❌ **Don't pass github_token** (deprecated, causes warnings):
+```yaml
+- uses: fridzema/ai-weekly-changelog-action@main
+  with:
+    openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}  # ← NOT NEEDED - Causes warnings
+```
+
+✅ **Do this** (clean and simple):
+```yaml
+steps:
+  - uses: fridzema/ai-weekly-changelog-action@main
+    with:
+      openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+```
+
+### Testing Your Setup
+
+1. **Dry Run First** (recommended):
+   ```yaml
+   - uses: fridzema/ai-weekly-changelog-action@main
+     with:
+       openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+       dry_run: true  # Preview without committing
+   ```
+
+2. **Check the workflow summary** - dry run output appears in the GitHub Actions step summary
+
+3. **Run for real** - remove `dry_run: true` to commit the changelog
+
+### Version Pinning
+
+For production use, pin to a specific version instead of `@main`:
+
+```yaml
+uses: fridzema/ai-weekly-changelog-action@v1.0.0  # Pin to specific release
+# or
+uses: fridzema/ai-weekly-changelog-action@v1      # Pin to major version
+```
+
+Check the [releases page](https://github.com/fridzema/ai-weekly-changelog-action/releases) for available versions.
+
 ### Prerequisites
 
 1.  **Add OpenRouter API Key to Secrets:**

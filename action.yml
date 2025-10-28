@@ -12,8 +12,8 @@ inputs:
     description: 'API key for OpenRouter.ai'
     required: true
   github_token:
-    description: 'GitHub token for checking out code and committing changes.'
-    required: true
+    description: '[DEPRECATED - Not needed] GitHub token is automatically provided by GitHub Actions context.'
+    required: false
     default: ${{ github.token }}
   days_back:
     description: 'Number of days to look back for commits (1-365).'
@@ -57,7 +57,6 @@ runs:
       uses: actions/checkout@v4
       with:
         fetch-depth: ${{ inputs.days_back <= 7 && 50 || (inputs.days_back <= 30 && 100 || 200) }} # Dynamic fetch depth based on lookback period
-        token: ${{ inputs.github_token }}
 
     - name: Collect commits and file changes
       id: commits
@@ -256,7 +255,6 @@ runs:
         file_pattern: 'CHANGELOG.md'
         commit_user_name: 'github-actions[bot]'
         commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
-        token: ${{ inputs.github_token }}
 
     - name: Output dry-run results
       if: steps.commits.outputs.has_commits == 'true' && inputs.dry_run == 'true'
