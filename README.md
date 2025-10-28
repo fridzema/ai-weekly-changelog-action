@@ -55,6 +55,39 @@ jobs:
           force: ${{ github.event.inputs.force || false }}
 ```
 
+### Testing Configuration (Dry Run)
+
+To test your configuration without committing changes to the repository:
+
+```yaml
+# .github/workflows/test-changelog.yml
+name: Test Changelog Generation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test_changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Only read permission needed for dry run
+
+    steps:
+      - name: Test Changelog Generation
+        uses: your-github-username/your-action-repo-name@v1
+        with:
+          openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          dry_run: true  # Generate changelog without committing
+          days_back: 7
+          language: 'English'
+```
+
+When `dry_run` is enabled:
+- The changelog is generated normally using AI
+- The output is displayed in the GitHub Actions step summary (first 100 lines)
+- No commit is made to the repository
+- Perfect for testing configuration changes or different models
+
 ### Prerequisites
 
 1.  **Add OpenRouter API Key to Secrets:**
@@ -74,3 +107,4 @@ jobs:
 | `language`           | Output language. Options: `English`, `Dutch`, `German`, `French`, `Spanish`. | `false`  | `English`                  |
 | `force`              | Force update even if an entry for the current week already exists.           | `false`  | `false`                    |
 | `extended`           | Enable extended analysis with file changes and deeper commit inspection.     | `false`  | `false`                    |
+| `dry_run`            | Generate changelog without committing (outputs to step summary instead).     | `false`  | `false`                    |

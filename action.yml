@@ -35,6 +35,10 @@ inputs:
     description: 'Enable extended analysis with file changes and deeper commit inspection.'
     required: false
     default: 'false'
+  dry_run:
+    description: 'Generate changelog without committing (outputs to step summary instead).'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -52,7 +56,7 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: ${{ inputs.days_back > 30 && 200 || 100 }} # Dynamic fetch depth based on lookback period
+        fetch-depth: ${{ inputs.days_back <= 7 && 50 || (inputs.days_back <= 30 && 100 || 200) }} # Dynamic fetch depth based on lookback period
         token: ${{ inputs.github_token }}
 
     - name: Collect commits and file changes
@@ -105,26 +109,35 @@ runs:
           echo "🔍 Performing git analysis..."
           
           if [[ "$EXTENDED" == "true" ]]; then
-            echo "📊 Extended analysis enabled - collecting comprehensive data..."
-            
-            # Start with basic commit collection (always works)
-            echo "🔍 Collecting commits..."
+            echo "📊 Extended analysis enabled - collecting comprehensive data in parallel..."
+
+            # Run independent git operations in parallel for better performance
+            echo "🔍 Collecting commits and extended data..."
+
+            # Basic commits (background)
+            (
+              if ! git log --since="$SINCE_DATE" $GIT_FILTERS \
+                --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt; then
+                echo "⚠️  Advanced filters failed, using basic collection"
+                git log --since="$SINCE_DATE" --no-merges \
+                  --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+              fi
+            ) &
+            PID1=$!
+
+            # Extended commit info (background)
             git log --since="$SINCE_DATE" $GIT_FILTERS \
-              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || {
-              echo "⚠️ Git log command failed, trying without filters..."
-              git log --since="$SINCE_DATE" --no-merges \
-                --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
-            }
-            
-            # Check if we got commits before proceeding with extended analysis
+              --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt &
+            PID2=$!
+
+            # Wait for both operations to complete
+            wait $PID1 $PID2
+
+            # Check if we got commits before proceeding with statistics
             if [[ -s commits.txt ]]; then
-              echo "✅ Found commits, collecting extended data..."
-              
-              # Collect extended commit info
-              git log --since="$SINCE_DATE" $GIT_FILTERS \
-                --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt || true
-              
-              # Collect statistics
+              echo "✅ Found commits, collecting statistics..."
+
+              # Collect statistics (sequential - depends on previous data)
               git log --since="$SINCE_DATE" $GIT_FILTERS \
                 --numstat --name-only --pretty=format: | \
                 awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
@@ -154,14 +167,14 @@ runs:
             rm -f lines_added.tmp lines_deleted.tmp
             
           else
-            # Simple commit collection
+            # Simple commit collection with graceful fallback
             echo "🔍 Collecting commits (simple mode)..."
-            git log --since="$SINCE_DATE" $GIT_FILTERS \
-              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || {
-              echo "⚠️ Git log command failed, trying without filters..."
+            if ! git log --since="$SINCE_DATE" $GIT_FILTERS \
+              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt; then
+              echo "⚠️  Advanced filters failed, using basic collection"
               git log --since="$SINCE_DATE" --no-merges \
                 --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
-            }
+            fi
             echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
             
             # Cache simple results
@@ -169,8 +182,8 @@ runs:
             echo "extended_analysis=false" > "${CACHE_FILE}.meta"
           fi
           
-          # Clean old cache files (keep last 5)
-          find "$CACHE_DIR" -name "*_*_*" -type f | head -n -15 | xargs rm -f 2>/dev/null || true
+          # Clean old cache files (keep last 5 cache sets)
+          find "$CACHE_DIR" -name "*_commits.txt" -type f -printf '%T+ %p\n' | sort -r | tail -n +6 | cut -d' ' -f2- | sed 's/_commits\.txt$//' | xargs -I {} rm -f {}_* 2>/dev/null || true
         fi
 
         # Debug: Show what we found
@@ -200,6 +213,8 @@ runs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: '${{ github.action_path }}/requirements.txt'
 
     - name: Install Python dependencies
       if: steps.commits.outputs.has_commits == 'true'
@@ -216,6 +231,7 @@ runs:
         MODEL: ${{ inputs.model }}
         OUTPUT_LANGUAGE: ${{ inputs.language }}
         FORCE_UPDATE: ${{ inputs.force }}
+        DRY_RUN: ${{ inputs.dry_run }}
         EXTENDED_ANALYSIS: ${{ steps.commits.outputs.extended_analysis }}
         LINES_ADDED: ${{ steps.commits.outputs.lines_added }}
         LINES_DELETED: ${{ steps.commits.outputs.lines_deleted }}
@@ -232,7 +248,7 @@ runs:
         echo "year=$(date +%Y)" >> "$GITHUB_OUTPUT"
 
     - name: Commit and push changelog
-      if: steps.commits.outputs.has_commits == 'true'
+      if: steps.commits.outputs.has_commits == 'true' && inputs.dry_run != 'true'
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
         commit_message: |
@@ -242,8 +258,25 @@ runs:
         commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
         token: ${{ inputs.github_token }}
 
+    - name: Output dry-run results
+      if: steps.commits.outputs.has_commits == 'true' && inputs.dry_run == 'true'
+      shell: bash
+      run: |
+        echo "## 🧪 Dry Run - Changelog Preview" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The following changelog would be generated (not committed):" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commits processed:** ${{ steps.commits.outputs.commit_count }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Model used:** ${{ inputs.model }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Language:** ${{ inputs.language }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Extended analysis:** ${{ inputs.extended }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```markdown' >> $GITHUB_STEP_SUMMARY
+        head -100 CHANGELOG.md >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
     - name: Create summary
-      if: steps.commits.outputs.has_commits == 'true'
+      if: steps.commits.outputs.has_commits == 'true' && inputs.dry_run != 'true'
       shell: bash
       run: |
         echo "## 📝 Weekly Changelog Generated" >> $GITHUB_STEP_SUMMARY

@@ -106,10 +106,12 @@ model = os.getenv("MODEL", "openai/gpt-5-mini")
 output_language = os.getenv("OUTPUT_LANGUAGE", "English")
 force_update = os.getenv("FORCE_UPDATE", "false").lower() == "true"
 extended_analysis = os.getenv("EXTENDED_ANALYSIS", "false").lower() == "true"
+dry_run = os.getenv("DRY_RUN", "false").lower() == "true"
 
 print(f"🤖 Using model: {model}")
 print(f"🌍 Output language: {output_language}")
 print(f"🔧 Force update: {force_update}")
+print(f"🧪 Dry run mode: {dry_run}")
 print(f"🔍 Extended analysis: {extended_analysis}")
 
 # Language-specific configurations
@@ -457,7 +459,18 @@ def generate_summary(prompt, description):
             "X-Title": "Weekly-Changelog-Generator"
         }
     )
-    return response.choices[0].message.content.strip()
+
+    # Validate response
+    response_content = response.choices[0].message.content.strip()
+
+    if not response_content or len(response_content) < 50:
+        raise ValueError(f"AI response too short or empty for {description}")
+
+    # Validate has markdown formatting
+    if "###" not in response_content and "**" not in response_content:
+        print(f"⚠️  Warning: {description} may be poorly formatted (missing markdown headers)")
+
+    return response_content
 
 # Generate summaries with fallback - separate API calls for better formatting
 try:
