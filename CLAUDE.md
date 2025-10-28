@@ -40,7 +40,7 @@ Since this is a GitHub Action, local testing requires simulating the GitHub envi
 # Set required environment variables
 export OPENROUTER_API_KEY="your-key-here"
 export GITHUB_REPOSITORY="owner/repo-name"
-export MODEL="openai/gpt-4o-mini"
+export MODEL="openai/gpt-5-mini"
 export OUTPUT_LANGUAGE="English"
 
 # Create test commit data
@@ -106,7 +106,7 @@ pip install -r requirements.txt
 - `openrouter_api_key` (required): OpenRouter API key
 - `github_token` (optional): Defaults to `${{ github.token }}`
 - `days_back` (optional): 1-365 days, defaults to 7
-- `model` (optional): OpenRouter model, defaults to 'openai/gpt-4o-mini'
+- `model` (optional): OpenRouter model, defaults to 'openai/gpt-5-mini'
 - `language` (optional): Output language, defaults to 'English'
 - `force` (optional): Force update existing entries
 - `extended` (optional): Enable detailed file analysis

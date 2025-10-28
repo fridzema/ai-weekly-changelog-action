@@ -42,9 +42,9 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                     # Handle model not found errors
                     if "404" in error_str or "model not found" in error_str or "not available" in error_str:
                         print(f"❌ Model error: {str(e)}")
-                        print(f"💡 The model '{os.getenv('MODEL', 'openai/gpt-4o-mini')}' may not be available.")
+                        print(f"💡 The model '{os.getenv('MODEL', 'openai/gpt-5-mini')}' may not be available.")
                         print(f"💡 Check available models at: https://openrouter.ai/models")
-                        print(f"💡 Consider using 'openai/gpt-4o-mini' or 'anthropic/claude-3-haiku' as alternatives.")
+                        print(f"💡 Consider using 'openai/gpt-5-mini' or 'anthropic/claude-3-haiku' as alternatives.")
                         raise Exception(f"Model availability error: {str(e)}")
                     
                     # Handle network errors
@@ -102,7 +102,7 @@ client = OpenAI(
     timeout=30.0
 )
 
-model = os.getenv("MODEL", "openai/gpt-4o-mini")
+model = os.getenv("MODEL", "openai/gpt-5-mini")
 output_language = os.getenv("OUTPUT_LANGUAGE", "English")
 force_update = os.getenv("FORCE_UPDATE", "false").lower() == "true"
 extended_analysis = os.getenv("EXTENDED_ANALYSIS", "false").lower() == "true"

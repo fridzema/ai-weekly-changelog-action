@@ -49,7 +49,7 @@ jobs:
 
           # Optional inputs with their defaults:
           # days_back: 7
-          # model: 'openai/gpt-4o-mini'
+          # model: 'openai/gpt-5-mini'
           # language: 'English'
           # extended: false
           force: ${{ github.event.inputs.force || false }}
@@ -70,7 +70,7 @@ jobs:
 | `openrouter_api_key` | API key for OpenRouter.ai.                                                   | `true`   | `N/A`                      |
 | `github_token`       | GitHub token for checking out code and committing changes.                   | `true`   | `${{ github.token }}`      |
 | `days_back`          | Number of days to look back for commits (1-365).                             | `false`  | `7`                        |
-| `model`              | The OpenRouter model to use (e.g., `openai/gpt-4o-mini`).                    | `false`  | `openai/gpt-4o-mini`       |
+| `model`              | The OpenRouter model to use (e.g., `openai/gpt-5-mini`).                    | `false`  | `openai/gpt-5-mini`       |
 | `language`           | Output language. Options: `English`, `Dutch`, `German`, `French`, `Spanish`. | `false`  | `English`                  |
 | `force`              | Force update even if an entry for the current week already exists.           | `false`  | `false`                    |
 | `extended`           | Enable extended analysis with file changes and deeper commit inspection.     | `false`  | `false`                    |
