@@ -56,7 +56,7 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: ${{ inputs.days_back <= 7 && 50 || (inputs.days_back <= 30 && 100 || 200) }} # Dynamic fetch depth based on lookback period
+        fetch-depth: ${{ inputs.days_back <= 7 && 100 || (inputs.days_back <= 30 && 300 || 500) }} # Dynamic fetch depth based on lookback period - increased to handle active repositories
 
     - name: Collect commits and file changes
       id: commits
@@ -233,6 +233,7 @@ runs:
         LINES_ADDED: ${{ steps.commits.outputs.lines_added }}
         LINES_DELETED: ${{ steps.commits.outputs.lines_deleted }}
         FILES_CHANGED: ${{ steps.commits.outputs.files_changed }}
+        DAYS_BACK: ${{ inputs.days_back }} # Pass days_back for validation
         GITHUB_REPOSITORY: ${{ github.repository }} # Pass repository info to the script
       run: python3 ${{ github.action_path }}/src/generate_changelog.py
 
