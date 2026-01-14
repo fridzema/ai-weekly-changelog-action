@@ -16,9 +16,17 @@ inputs:
     required: false
     default: ${{ github.token }}
   days_back:
-    description: 'Number of days to look back for commits (1-365).'
+    description: 'Number of days to look back for commits (1-365). Ignored if from_ref is provided.'
     required: false
     default: '7'
+  from_ref:
+    description: 'Git ref to start from (tag, commit, branch). If provided, days_back is ignored.'
+    required: false
+    default: ''
+  to_ref:
+    description: 'Git ref to end at (tag, commit, branch). Defaults to HEAD.'
+    required: false
+    default: 'HEAD'
   model:
     description: 'The OpenRouter model to use (e.g., openai/gpt-5-mini).'
     required: false
@@ -46,41 +54,82 @@ runs:
     - name: Validate inputs
       shell: bash
       run: |
+        FROM_REF="${{ inputs.from_ref }}"
         DAYS_BACK="${{ inputs.days_back }}"
-        if ! [[ "$DAYS_BACK" =~ ^[0-9]+$ ]] || [ "$DAYS_BACK" -gt 365 ] || [ "$DAYS_BACK" -lt 1 ]; then
-          echo "❌ Invalid days_back value: $DAYS_BACK. Must be a number between 1-365."
-          exit 1
+
+        # Only validate days_back if from_ref is not provided
+        if [ -z "$FROM_REF" ]; then
+          if ! [[ "$DAYS_BACK" =~ ^[0-9]+$ ]] || [ "$DAYS_BACK" -gt 365 ] || [ "$DAYS_BACK" -lt 1 ]; then
+            echo "❌ Invalid days_back value: $DAYS_BACK. Must be a number between 1-365."
+            exit 1
+          fi
+          echo "✅ Input validation passed (using days_back: $DAYS_BACK)"
+        else
+          echo "✅ Input validation passed (using ref range: $FROM_REF...${{ inputs.to_ref }})"
         fi
-        echo "✅ Input validation passed"
 
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: ${{ inputs.days_back <= 7 && 100 || (inputs.days_back <= 30 && 300 || 500) }} # Dynamic fetch depth based on lookback period - increased to handle active repositories
+        # Use full history when using refs (needed to find tags/commits), otherwise dynamic depth
+        fetch-depth: ${{ inputs.from_ref != '' && 0 || (inputs.days_back <= 7 && 100 || (inputs.days_back <= 30 && 300 || 500)) }}
 
     - name: Collect commits and file changes
       id: commits
       shell: bash
       run: |
         # Consolidated git operations for optimal performance
+        FROM_REF="${{ inputs.from_ref }}"
+        TO_REF="${{ inputs.to_ref }}"
         DAYS_BACK="${{ inputs.days_back }}"
         EXTENDED="${{ inputs.extended }}"
-        SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
-        
+
         # Common git filter patterns (simplified to avoid escaping issues)
         GIT_FILTERS="--no-merges"
 
-        echo "Collecting commits since: $SINCE_DATE"
-        echo "🔧 Debug: Using filters: $GIT_FILTERS"
-        
-        # Quick test to see if any commits exist at all
-        TOTAL_COMMITS=$(git log --since="$SINCE_DATE" --oneline | wc -l || echo "0")
-        FILTERED_COMMITS=$(git log --since="$SINCE_DATE" $GIT_FILTERS --oneline | wc -l || echo "0")
-        echo "📊 Debug: Total commits in period: $TOTAL_COMMITS, After filters: $FILTERED_COMMITS"
-        
+        # Determine commit range mode: ref-based or date-based
+        if [ -n "$FROM_REF" ]; then
+          # Ref-based mode: use from_ref..to_ref range
+          USE_REF_MODE="true"
+          COMMIT_RANGE="${FROM_REF}..${TO_REF}"
+          echo "📍 Using ref-based commit range: $COMMIT_RANGE"
+          echo "🔧 Debug: Using filters: $GIT_FILTERS"
+
+          # Validate refs exist
+          if ! git rev-parse "$FROM_REF" >/dev/null 2>&1; then
+            echo "❌ Error: from_ref '$FROM_REF' does not exist"
+            exit 1
+          fi
+          if ! git rev-parse "$TO_REF" >/dev/null 2>&1; then
+            echo "❌ Error: to_ref '$TO_REF' does not exist"
+            exit 1
+          fi
+
+          # Quick test to see if any commits exist at all
+          TOTAL_COMMITS=$(git log "$COMMIT_RANGE" --oneline 2>/dev/null | wc -l || echo "0")
+          FILTERED_COMMITS=$(git log "$COMMIT_RANGE" $GIT_FILTERS --oneline 2>/dev/null | wc -l || echo "0")
+          echo "📊 Debug: Total commits in range: $TOTAL_COMMITS, After filters: $FILTERED_COMMITS"
+        else
+          # Date-based mode: use --since with days_back
+          USE_REF_MODE="false"
+          SINCE_DATE=$(date -d "${DAYS_BACK} days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_RANGE=""
+          echo "📅 Using date-based collection: commits since $SINCE_DATE"
+          echo "🔧 Debug: Using filters: $GIT_FILTERS"
+
+          # Quick test to see if any commits exist at all
+          TOTAL_COMMITS=$(git log --since="$SINCE_DATE" --oneline | wc -l || echo "0")
+          FILTERED_COMMITS=$(git log --since="$SINCE_DATE" $GIT_FILTERS --oneline | wc -l || echo "0")
+          echo "📊 Debug: Total commits in period: $TOTAL_COMMITS, After filters: $FILTERED_COMMITS"
+        fi
+
         # Create cache key based on repository state and parameters
         LATEST_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-        CACHE_KEY="${LATEST_COMMIT:0:8}_${DAYS_BACK}_${EXTENDED}"
+        if [ "$USE_REF_MODE" = "true" ]; then
+          CACHE_KEY="${LATEST_COMMIT:0:8}_${FROM_REF}_${TO_REF}_${EXTENDED}"
+        else
+          CACHE_KEY="${LATEST_COMMIT:0:8}_${DAYS_BACK}_${EXTENDED}"
+        fi
         CACHE_DIR="/tmp/changelog_cache"
         CACHE_FILE="$CACHE_DIR/$CACHE_KEY"
         
@@ -113,19 +162,26 @@ runs:
             # Run independent git operations in parallel for better performance
             echo "🔍 Collecting commits and extended data..."
 
+            # Determine git log arguments based on mode
+            if [ "$USE_REF_MODE" = "true" ]; then
+              GIT_LOG_RANGE="$COMMIT_RANGE"
+            else
+              GIT_LOG_RANGE="--since=$SINCE_DATE"
+            fi
+
             # Basic commits (background)
             (
-              if ! git log --since="$SINCE_DATE" $GIT_FILTERS \
+              if ! git log $GIT_LOG_RANGE $GIT_FILTERS \
                 --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt; then
                 echo "⚠️  Advanced filters failed, using basic collection"
-                git log --since="$SINCE_DATE" --no-merges \
+                git log $GIT_LOG_RANGE --no-merges \
                   --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
               fi
             ) &
             PID1=$!
 
             # Extended commit info (background)
-            git log --since="$SINCE_DATE" $GIT_FILTERS \
+            git log $GIT_LOG_RANGE $GIT_FILTERS \
               --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt &
             PID2=$!
 
@@ -137,7 +193,7 @@ runs:
               echo "✅ Found commits, collecting statistics..."
 
               # Collect statistics (sequential - depends on previous data)
-              git log --since="$SINCE_DATE" $GIT_FILTERS \
+              git log $GIT_LOG_RANGE $GIT_FILTERS \
                 --numstat --name-only --pretty=format: | \
                 awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
             else
@@ -168,10 +224,18 @@ runs:
           else
             # Simple commit collection with graceful fallback
             echo "🔍 Collecting commits (simple mode)..."
-            if ! git log --since="$SINCE_DATE" $GIT_FILTERS \
+
+            # Determine git log arguments based on mode
+            if [ "$USE_REF_MODE" = "true" ]; then
+              GIT_LOG_RANGE="$COMMIT_RANGE"
+            else
+              GIT_LOG_RANGE="--since=$SINCE_DATE"
+            fi
+
+            if ! git log $GIT_LOG_RANGE $GIT_FILTERS \
               --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt; then
               echo "⚠️  Advanced filters failed, using basic collection"
-              git log --since="$SINCE_DATE" --no-merges \
+              git log $GIT_LOG_RANGE --no-merges \
                 --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
             fi
             echo "extended_analysis=false" >> "$GITHUB_OUTPUT"
@@ -198,7 +262,11 @@ runs:
         fi
         
         if [[ ! -s commits.txt ]]; then
-          echo "ℹ️ No commits found in the past $DAYS_BACK days."
+          if [ "$USE_REF_MODE" = "true" ]; then
+            echo "ℹ️ No commits found in range $COMMIT_RANGE."
+          else
+            echo "ℹ️ No commits found in the past $DAYS_BACK days."
+          fi
           echo "has_commits=false" >> "$GITHUB_OUTPUT"
         else
           COMMIT_COUNT=$(wc -l < commits.txt)
@@ -287,5 +355,9 @@ runs:
       if: steps.commits.outputs.has_commits == 'false'
       shell: bash
       run: |
-        echo "## ℹ️ No Changes This Week" >> $GITHUB_STEP_SUMMARY
-        echo "No commits found in the past ${{ inputs.days_back }} days. Changelog was not updated." >> $GITHUB_STEP_SUMMARY
+        echo "## ℹ️ No Changes Found" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${{ inputs.from_ref }}" ]; then
+          echo "No commits found in range ${{ inputs.from_ref }}..${{ inputs.to_ref }}. Changelog was not updated." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "No commits found in the past ${{ inputs.days_back }} days. Changelog was not updated." >> $GITHUB_STEP_SUMMARY
+        fi
