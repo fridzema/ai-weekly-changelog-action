@@ -29,10 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Language fallback to English logs warning message visible in Action output
   3. API key never appears in error messages or logs in any error path
   4. Codebase is ready for test suite addition (no silent failures that would hide test issues)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: [Plan details to be determined]
+- [ ] 01-01-PLAN.md — Fix bare exception handlers and add language fallback warning
+- [ ] 01-02-PLAN.md — Add API key redaction to all error message paths
 
 ### Phase 2: Testing Infrastructure
 **Goal**: Add pytest-based test suite achieving 80%+ coverage on core logic
@@ -105,7 +106,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Code Foundation | 0/TBD | Not started | - |
+| 1. Code Foundation | 0/2 | Planned | - |
 | 2. Testing Infrastructure | 0/TBD | Not started | - |
 | 3. Code Quality Tooling | 0/TBD | Not started | - |
 | 4. CI/CD Pipeline | 0/TBD | Not started | - |
