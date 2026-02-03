@@ -7,6 +7,19 @@ import re
 from functools import wraps
 from openai import OpenAI
 
+def redact_api_key(text: str) -> str:
+    """Redact API key from error messages to prevent accidental exposure."""
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    if api_key and len(api_key) > 8:
+        # Redact the full key, showing only first 4 chars for debugging
+        redacted = api_key[:4] + "..." + "[REDACTED]"
+        text = text.replace(api_key, redacted)
+    # Also catch common API key patterns that might appear
+    import re
+    # Redact any sk-or-* pattern (OpenRouter keys)
+    text = re.sub(r'sk-or-[a-zA-Z0-9_-]+', 'sk-or-...[REDACTED]', text)
+    return text
+
 def retry_api_call(max_retries=3, delay=2, timeout=30):
     """Decorator to retry API calls with exponential backoff, jitter, and rate limiting handling"""
     def decorator(func):
