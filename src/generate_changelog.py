@@ -191,10 +191,10 @@ def get_language_config(language: str) -> dict[str, str]:
 
 def retry_api_call(
     max_retries: int = 3, delay: int = 2, timeout: int = 30
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+) -> Callable[[Callable[..., T]], Callable[..., T | None]]:
     """Decorator to retry API calls with exponential backoff, jitter, and rate limiting handling"""
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., T]) -> Callable[..., T | None]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T | None:
             import random
@@ -418,7 +418,7 @@ if __name__ == "__main__":
                 with open("files_changed.txt", encoding="utf-8") as f:
                     files_list = f.read().strip().split("\n")
                     # Group files by type/directory
-                    file_groups = {}
+                    file_groups: dict[str, list[str]] = {}
                     for file_path in files_list:
                         if file_path:
                             # Get file extension or directory
@@ -523,7 +523,8 @@ if __name__ == "__main__":
             },
         )
 
-        merged_summary = response.choices[0].message.content.strip()
+        content = response.choices[0].message.content
+        merged_summary = content.strip() if content else ""
 
         if not merged_summary or len(merged_summary) < 50:
             raise ValueError(f"Merged {summary_type} too short or empty")
@@ -819,7 +820,8 @@ if __name__ == "__main__":
         )
 
         # Validate response
-        response_content = response.choices[0].message.content.strip()
+        content = response.choices[0].message.content
+        response_content = content.strip() if content else ""
 
         if not response_content or len(response_content) < 50:
             raise ValueError(f"AI response too short or empty for {description}")
