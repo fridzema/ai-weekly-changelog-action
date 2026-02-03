@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-03)
 ## Current Position
 
 Phase: 2 of 5 (Testing Infrastructure)
-Plan: 1 of 5 complete
+Plan: 2 of 5 complete
 Status: In progress
-Last activity: 2026-02-03 — Completed 02-01-PLAN.md
+Last activity: 2026-02-03 — Completed 02-02-PLAN.md
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 2.7 min
-- Total execution time: 0.13 hours
+- Total plans completed: 4
+- Average duration: 2.5 min
+- Total execution time: 0.17 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 2/2 | 5min | 2.5min |
-| 02 | 1/5 | 3min | 3.0min |
+| 02 | 2/5 | 5min | 2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min), 01-02 (3min), 02-01 (3min)
+- Last 5 plans: 01-01 (2min), 01-02 (3min), 02-01 (3min), 02-02 (2min)
 - Trend: Steady (2-3 min per plan)
 
 *Updated after each plan completion*
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - TEST-01: Session-scoped autouse fixture for environment (handles import-time side effects)
 - TEST-02: Add if __name__ == '__main__' guard (enables module import for testing)
 - TEST-03: 80% coverage threshold (standard Python quality bar)
+- TEST-04: Mock time.sleep for instant retry tests (avoid 30+ second test runs)
+- TEST-05: Use monkeypatch for environment variable control (clean test isolation)
+- TEST-06: Exceed plan minimums for better coverage when cost is low (12 retry tests vs 10 planned)
 
 ### Phase 1 Complete
 
@@ -75,5 +78,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 02-01-PLAN.md (pytest infrastructure setup)
+Stopped at: Completed 02-02-PLAN.md (retry and redaction tests)
 Resume file: None
