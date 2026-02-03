@@ -64,14 +64,25 @@ pip install -r requirements.txt
 - Filters out version update commits and documentation updates
 - **OPTIMIZED**: Consolidated git operations using single command with multiple formats
 - **OPTIMIZED**: Intelligent caching system based on repository state and parameters
-- **OPTIMIZED**: Dynamic fetch depth based on lookback period
+- **OPTIMIZED**: Dynamic fetch depth based on lookback period (100/300/500 commits for 7/30/90+ days)
+- **ENHANCED**: Increased fetch depths to handle active repositories (previously 50/100/200)
 
 ### AI Integration
 - **OPTIMIZED**: Enhanced retry logic with exponential backoff + jitter (3 attempts)
 - **OPTIMIZED**: Specific handling for rate limiting (429 errors) with longer backoff
 - **OPTIMIZED**: Comprehensive error handling with actionable guidance for auth, model, and network issues
-- **Separate API calls**: Makes 2 independent calls (technical + business) for better formatting control
-- **Token allocation**: 1200 tokens per summary (2400 total) for comprehensive, well-formatted output
+- **INTELLIGENT CHUNKING**: Automatically splits large commit sets (>5 commits) into small, focused chunks for highly detailed analysis
+  - **Micro-chunking approach**: Maximum 5 commits per chunk for focused, detailed analysis
+  - Each chunk is analyzed separately with full context and attention to detail
+  - Chunk summaries are merged using AI to create cohesive, comprehensive final output
+  - Visual indicators in changelog when chunking is used
+  - **Quality over quantity**: More API calls but significantly better summary quality
+- **Separate API calls**: Makes 2 independent calls per chunk (technical + business) for better formatting control
+- **Token allocation**: 3000-6000 tokens per summary (dynamic scaling based on commit count and analysis mode)
+  - Standard mode: 3000 tokens per summary
+  - Large commit sets (>100): 5000 tokens per summary
+  - Extended analysis: 6000 tokens per summary
+  - Merge operations: 6000 tokens for combining chunk summaries
 - **Explicit markdown formatting**: Prompts include structured format examples with headers, bullets, and visual hierarchy
 - Fallback summaries for API failures
 
@@ -81,10 +92,19 @@ pip install -r requirements.txt
 - Note: Pip caching not used in composite actions due to path resolution issues
 
 ### Performance Optimizations
-- **OPTIMIZED**: Streaming support for large commit sets (>100 commits)
-- **OPTIMIZED**: Memory-efficient chunked processing for very large repositories
+- **MICRO-CHUNKING STRATEGY**: Automatic chunking for commit sets >5 commits
+  - **Small chunks of ~5 commits each** for highly detailed, focused AI analysis
+  - Each commit receives focused attention in its chunk context
+  - Sequential processing with comprehensive retry logic per chunk
+  - Progress indicators showing chunk completion (e.g., "✅ Chunk 12/30 technical summary completed")
+  - **Trade-off**: More API calls for significantly better summary quality and completeness
+- **OPTIMIZED**: Memory-efficient processing for very large repositories (200+ commits)
 - **OPTIMIZED**: Temporary file cleanup and cache management
-- **OPTIMIZED**: Progress indicators for large operations
+- **OPTIMIZED**: Commit count validation with warnings for potentially incomplete data
+- **ENHANCED**: Graceful degradation - continues processing even if individual chunks fail
+- **Cost-aware**: Typical processing:
+  - 30 commits = 6 chunks × 2 summaries = 12 chunk API calls + 2 merge calls = ~14 API calls
+  - 150 commits = 30 chunks × 2 summaries = 60 chunk API calls + 2 merge calls = ~62 API calls
 
 ### Caching System
 - Cache key based on: `{latest_commit_hash}_{days_back}_{extended_mode}`
@@ -104,6 +124,72 @@ pip install -r requirements.txt
 - Force update capability to overwrite existing entries
 - Automatic duplicate detection and prevention
 - Maintains changelog structure with proper markdown formatting
+
+## Troubleshooting Large Commit Sets
+
+### Symptoms of Incomplete Changelog
+- Summary appears cut off or incomplete
+- Only seeing a few commits despite long time period (e.g., 30 days)
+- Mismatch between summary content and "All Commits" list
+- Missing recent features or changes in the technical/business summaries
+
+### Root Causes
+1. **Insufficient Git Fetch Depth** (Fixed in current version)
+   - Previously: 50/100/200 commits for 7/30/90+ days
+   - Now: 100/300/500 commits for 7/30/90+ days
+   - If you still see issues, the repository may be extremely active
+
+2. **Old Chunking Logic** (Fixed in current version)
+   - Previously: Hard limit of 100 commits, rest ignored
+   - Now: Micro-chunking analyzes ALL commits in small groups of 5 for detailed, focused analysis
+
+### Verification Steps
+1. **Check GitHub Actions logs** for these indicators:
+   ```
+   📊 Large commit set detected (X commits)
+   🔄 Will analyze in Y chunks of ~5 commits each for detailed analysis
+   💡 This approach ensures each commit gets focused attention before merging into comprehensive summary
+   ✅ Chunk 1/Y technical summary completed
+   ✅ Chunk 1/Y business summary completed
+   ...
+   🔄 Merging Y technical chunk summaries...
+   🔄 Merging Y business chunk summaries...
+   ```
+   Note: With 30 commits, expect ~6 chunks; with 150 commits, expect ~30 chunks
+
+2. **Check CHANGELOG.md** for chunking indicator:
+   ```markdown
+   > 📊 **Note**: This changelog was generated by analyzing X commits across Y detailed chunks for comprehensive, high-quality coverage.
+   ```
+
+3. **Validate commit count** matches expectations:
+   - Look at GitHub Actions step summary: "Commits processed: X"
+   - Compare with `git log --since="30 days ago" --oneline | wc -l`
+
+### For Extremely Active Repositories (>500 commits/month)
+If you're still experiencing issues with very high commit volumes:
+
+1. **Increase fetch depth** in your workflow:
+   ```yaml
+   - name: Checkout repository
+     uses: actions/checkout@v4
+     with:
+       fetch-depth: 1000  # Increase if needed
+   ```
+
+2. **Reduce lookback period**:
+   - Use `days_back: 14` instead of `days_back: 30`
+   - Run changelog more frequently (weekly instead of monthly)
+
+3. **Monitor API costs**:
+   - **Micro-chunking = many more API calls** for better quality
+   - Typical costs with GPT-5-mini (estimated):
+     - 30 commits: ~14 API calls ≈ $0.05-0.15 per changelog
+     - 150 commits: ~62 API calls ≈ $0.20-0.80 per changelog
+     - 300 commits: ~122 API calls ≈ $0.40-1.50 per changelog
+   - **Quality vs Cost trade-off**: Micro-chunking prioritizes summary quality over API costs
+   - Consider using smaller `days_back` values for cost optimization
+   - Alternatively, increase `COMMITS_PER_CHUNK` in the code (line 380) if cost is a concern
 
 ## Configuration
 

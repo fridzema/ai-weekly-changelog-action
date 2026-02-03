@@ -253,17 +253,21 @@ if extended_analysis:
                             key = f"*.{ext} files"
                         else:
                             key = "Config/Other files"
-                        
+
                         if key not in file_groups:
                             file_groups[key] = []
                         file_groups[key].append(file_path)
-                
+
                 file_changes_summary = []
                 for group, files in sorted(file_groups.items()):
-                    file_changes_summary.append(f"**{group}**: {', '.join(files[:5])}")
-                    if len(files) > 5:
-                        file_changes_summary.append(f"  _(and {len(files)-5} more)_")
-                
+                    # Only show count if more than 3 files, otherwise show names
+                    if len(files) <= 3:
+                        file_changes_summary.append(f"**{group}**: {', '.join(files)}")
+                    else:
+                        # Show count + first 2 examples only (prevents oversized prompts)
+                        examples = ', '.join(files[:2])
+                        file_changes_summary.append(f"**{group}** ({len(files)} files): {examples}, ...")
+
                 file_changes_data = '\n'.join(file_changes_summary)
     except Exception as e:
         print(f"⚠️  Could not read extended data: {e}")
@@ -343,10 +347,19 @@ Language: {output_language}
 Generate the merged {summary_type}:
 """).strip()
 
-    # Estimate tokens (rough: ~4 chars per token) and warn for large payloads
+    # Check prompt size and truncate if needed (safety net for 413 errors)
+    MAX_MERGE_PROMPT_CHARS = 100000  # ~25K tokens, safe limit for most models
+    if len(merge_prompt) > MAX_MERGE_PROMPT_CHARS:
+        print(f"⚠️  Merge prompt too large ({len(merge_prompt)} chars), truncating to {MAX_MERGE_PROMPT_CHARS}")
+        merge_prompt = merge_prompt[:MAX_MERGE_PROMPT_CHARS] + "\n\n[Some chunk summaries truncated due to size limits]"
+
+    # Validate request size before sending (fail fast with clear error)
     estimated_tokens = len(merge_prompt) // 4
+    if estimated_tokens > 120000:  # Most models have 128K context limit
+        raise ValueError(f"Merge prompt too large (~{estimated_tokens} tokens). Consider using smaller batch_size in hierarchical merge.")
+
     if estimated_tokens > 30000:
-        print(f"⚠️ Warning: Large merge payload (~{estimated_tokens} tokens)")
+        print(f"⚠️  Warning: Large merge payload (~{estimated_tokens} tokens)")
 
     # Use higher token limit for merging
     response = client.chat.completions.create(
@@ -460,6 +473,11 @@ extended_context = ""
 if extended_analysis and extended_data:
     extended_context = f"\n\nDetailed file changes and statistics are also available for deeper analysis."
     if file_changes_data:
+        # Limit file changes data to prevent oversized prompts (413 errors)
+        MAX_FILE_CHANGES_CHARS = 5000
+        if len(file_changes_data) > MAX_FILE_CHANGES_CHARS:
+            print(f"⚠️  File changes data truncated ({len(file_changes_data)} -> {MAX_FILE_CHANGES_CHARS} chars)")
+            file_changes_data = file_changes_data[:MAX_FILE_CHANGES_CHARS] + "\n... (truncated)"
         extended_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
 # Technical prompt template with explicit markdown formatting
@@ -566,6 +584,18 @@ def generate_summary(prompt, description, chunk_number=None):
     """Generate a single summary (technical or business) with proper markdown formatting"""
     chunk_info = f" (chunk {chunk_number})" if chunk_number else ""
     print(f"🔄 Generating {description}{chunk_info}...")
+
+    # Check prompt size and truncate if needed (safety net for 413 errors)
+    MAX_PROMPT_CHARS = 100000  # ~25K tokens, safe limit for most models
+    if len(prompt) > MAX_PROMPT_CHARS:
+        print(f"⚠️  Prompt too large ({len(prompt)} chars), truncating to {MAX_PROMPT_CHARS}")
+        # Keep the beginning (template + commits) and truncate extended data at the end
+        prompt = prompt[:MAX_PROMPT_CHARS] + "\n\n[Extended data truncated due to size limits]"
+
+    # Validate request size before sending (fail fast with clear error)
+    estimated_tokens = len(prompt) // 4
+    if estimated_tokens > 120000:  # Most models have 128K context limit
+        raise ValueError(f"Prompt too large (~{estimated_tokens} tokens). Consider reducing extended analysis data or days_back parameter.")
 
     # Significantly increased token limits for comprehensive summaries
     # Dynamic scaling based on extended analysis and commit count
