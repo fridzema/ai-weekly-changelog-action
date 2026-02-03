@@ -62,14 +62,16 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Ruff linting configuration exists in pyproject.toml and ruff check passes with zero errors
   2. Ruff formatting applied to entire codebase (consistent style throughout)
-  3. Bandit security scanner configured and reports no critical issues
+  3. Ruff S (security) rules enabled and passing (replaces standalone Bandit)
   4. pip-audit dependency scanner configured and reports no vulnerable dependencies
   5. Type hints added to all public functions and mypy type checking passes
   6. All quality tools run successfully without breaking existing test suite
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: [Plan details to be determined]
+- [ ] 03-01-PLAN.md — Configure Ruff, mypy, and pip-audit in pyproject.toml
+- [ ] 03-02-PLAN.md — Apply Ruff formatting and fix all linting errors
+- [ ] 03-03-PLAN.md — Add type hints and verify all quality tools pass
 
 ### Phase 4: CI/CD Pipeline
 **Goal**: Automate quality checks through GitHub Actions workflow with visible status badges
@@ -112,6 +114,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Code Foundation | 2/2 | Complete | 2026-02-03 |
 | 2. Testing Infrastructure | 5/5 | Complete | 2026-02-03 |
-| 3. Code Quality Tooling | 0/TBD | Not started | - |
+| 3. Code Quality Tooling | 0/3 | Not started | - |
 | 4. CI/CD Pipeline | 0/TBD | Not started | - |
 | 5. Documentation Polish | 0/TBD | Not started | - |
