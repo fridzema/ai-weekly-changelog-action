@@ -37,7 +37,7 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                         if attempt == max_retries - 1:
                             print(f"❌ Rate limit exceeded after {max_retries} attempts.")
                             print(f"💡 Suggestion: Try again in a few minutes, or consider using a different model with higher rate limits.")
-                            raise Exception(f"Rate limit exceeded: {str(e)}")
+                            raise Exception(f"Rate limit exceeded: {redact_api_key(str(e))}")
                         
                         # Longer wait for rate limiting with jitter
                         wait_time = delay * (3 ** attempt) + random.uniform(1, 5)
@@ -47,50 +47,50 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                     
                     # Handle authentication errors
                     if "401" in error_str or "unauthorized" in error_str or "invalid api key" in error_str:
-                        print(f"❌ Authentication failed: {str(e)}")
+                        print(f"❌ Authentication failed: {redact_api_key(str(e))}")
                         print(f"💡 Please check your OPENROUTER_API_KEY secret is correctly set.")
                         print(f"💡 Verify your API key at: https://openrouter.ai/keys")
-                        raise Exception(f"Authentication error: {str(e)}")
+                        raise Exception(f"Authentication error: {redact_api_key(str(e))}")
                     
                     # Handle model not found errors
                     if "404" in error_str or "model not found" in error_str or "not available" in error_str:
-                        print(f"❌ Model error: {str(e)}")
+                        print(f"❌ Model error: {redact_api_key(str(e))}")
                         print(f"💡 The model '{os.getenv('MODEL', 'openai/gpt-5-mini')}' may not be available.")
                         print(f"💡 Check available models at: https://openrouter.ai/models")
                         print(f"💡 Consider using 'openai/gpt-5-mini' or 'anthropic/claude-3-haiku' as alternatives.")
-                        raise Exception(f"Model availability error: {str(e)}")
+                        raise Exception(f"Model availability error: {redact_api_key(str(e))}")
 
                     # Handle payload too large errors
                     if "413" in error_str or "too large" in error_str or "entity too large" in error_str:
-                        print(f"❌ Request payload too large: {str(e)}")
+                        print(f"❌ Request payload too large: {redact_api_key(str(e))}")
                         print(f"💡 The merge payload exceeds API limits. Hierarchical merge will be attempted.")
-                        raise Exception(f"Payload too large error: {str(e)}")
+                        raise Exception(f"Payload too large error: {redact_api_key(str(e))}")
                     
                     # Handle network errors
                     if "timeout" in error_str or "connection" in error_str or "network" in error_str:
                         if attempt == max_retries - 1:
                             print(f"❌ Network connectivity issues persisted after {max_retries} attempts.")
                             print(f"💡 Check your internet connection and GitHub Actions network status.")
-                            raise Exception(f"Network error: {str(e)}")
-                        
+                            raise Exception(f"Network error: {redact_api_key(str(e))}")
+
                         wait_time = delay * (2 ** attempt) + random.uniform(0.5, 2)
-                        print(f"🔌 Network issue (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                        print(f"🔌 Network issue (attempt {attempt + 1}/{max_retries}): {redact_api_key(str(e))}")
                         print(f"🔄 Retrying in {wait_time:.1f}s...")
                         time.sleep(wait_time)
                         continue
                     
                     # Generic error handling
                     if attempt == max_retries - 1:
-                        print(f"❌ Final attempt failed: {str(e)}")
+                        print(f"❌ Final attempt failed: {redact_api_key(str(e))}")
                         print(f"💡 If this persists, check the action logs and consider:")
                         print(f"   - Reducing the days_back parameter")
                         print(f"   - Using a different model")
                         print(f"   - Checking OpenRouter service status")
                         raise
-                    
+
                     # Exponential backoff with jitter for other errors
                     wait_time = delay * (2 ** attempt) + random.uniform(0.1, 1)
-                    print(f"⚠️  API call failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                    print(f"⚠️  API call failed (attempt {attempt + 1}/{max_retries}): {redact_api_key(str(e))}")
                     print(f"🔄 Retrying in {wait_time:.1f}s...")
                     time.sleep(wait_time)
             return None
@@ -693,14 +693,14 @@ try:
     tech_summary = generate_chunked_summary(commits_formatted, tech_prompt_template, "technical summary", "technical")
     print("✅ Technical summary generated successfully")
 except Exception as e:
-    print(f"⚠️  Using fallback for technical summary due to: {str(e)}")
+    print(f"⚠️  Using fallback for technical summary due to: {redact_api_key(str(e))}")
     tech_summary = config['fallback_tech']
 
 try:
     business_summary = generate_chunked_summary(commits_formatted, business_prompt_template, "business summary", "business")
     print("✅ Business summary generated successfully")
 except Exception as e:
-    print(f"⚠️  Using fallback for business summary due to: {str(e)}")
+    print(f"⚠️  Using fallback for business summary due to: {redact_api_key(str(e))}")
     business_summary = config['fallback_business']
 
 # Calculate week and year
@@ -818,7 +818,7 @@ try:
     print(f"✅ Changelog {action} for {config['week_label']} {week_num}, {year}")
 
 except Exception as e:
-    print(f"❌ Error writing changelog: {str(e)}")
+    print(f"❌ Error writing changelog: {redact_api_key(str(e))}")
     print(f"💡 Common causes:")
     print(f"   - File permissions issue")
     print(f"   - Disk space issue")
