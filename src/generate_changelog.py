@@ -214,7 +214,12 @@ language_configs = {
     }
 }
 
-config = language_configs.get(output_language, language_configs["English"])
+if output_language not in language_configs:
+    print(f"⚠️  Warning: Language '{output_language}' not supported. Falling back to English.")
+    print(f"💡 Supported languages: {', '.join(language_configs.keys())}")
+    config = language_configs["English"]
+else:
+    config = language_configs[output_language]
 
 # Read commits
 try:
