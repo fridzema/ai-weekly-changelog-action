@@ -80,13 +80,13 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. GitHub Actions workflow runs tests automatically on every push and pull request
   2. GitHub Actions workflow runs linting checks (Ruff) on every push and pull request
-  3. GitHub Actions workflow runs security scans (bandit, pip-audit) on every push and pull request
+  3. GitHub Actions workflow runs security scans (Ruff S rules, pip-audit) on every push and pull request
   4. CI status badge appears in README showing current build status
   5. All CI checks pass (green badge visible) for main branch
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: [Plan details to be determined]
+- [ ] 04-01-PLAN.md — Create CI workflow with parallel jobs and add status badge to README
 
 ### Phase 5: Documentation Polish
 **Goal**: Professional documentation and presentation for portfolio quality
@@ -115,5 +115,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Code Foundation | 2/2 | Complete | 2026-02-03 |
 | 2. Testing Infrastructure | 5/5 | Complete | 2026-02-03 |
 | 3. Code Quality Tooling | 3/3 | Complete | 2026-02-03 |
-| 4. CI/CD Pipeline | 0/TBD | Not started | - |
+| 4. CI/CD Pipeline | 0/1 | Planned | - |
 | 5. Documentation Polish | 0/TBD | Not started | - |
