@@ -46,6 +46,12 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                         print(f"💡 Check available models at: https://openrouter.ai/models")
                         print(f"💡 Consider using 'openai/gpt-5-mini' or 'anthropic/claude-3-haiku' as alternatives.")
                         raise Exception(f"Model availability error: {str(e)}")
+
+                    # Handle payload too large errors
+                    if "413" in error_str or "too large" in error_str or "entity too large" in error_str:
+                        print(f"❌ Request payload too large: {str(e)}")
+                        print(f"💡 The merge payload exceeds API limits. Hierarchical merge will be attempted.")
+                        raise Exception(f"Payload too large error: {str(e)}")
                     
                     # Handle network errors
                     if "timeout" in error_str or "connection" in error_str or "network" in error_str:
@@ -337,6 +343,11 @@ Language: {output_language}
 Generate the merged {summary_type}:
 """).strip()
 
+    # Estimate tokens (rough: ~4 chars per token) and warn for large payloads
+    estimated_tokens = len(merge_prompt) // 4
+    if estimated_tokens > 30000:
+        print(f"⚠️ Warning: Large merge payload (~{estimated_tokens} tokens)")
+
     # Use higher token limit for merging
     response = client.chat.completions.create(
         model=model,
@@ -358,6 +369,57 @@ Generate the merged {summary_type}:
         raise ValueError(f"Merged {summary_type} too short or empty")
 
     return merged_summary
+
+def hierarchical_merge_summaries(chunk_summaries, summary_type, total_commits, batch_size=5):
+    """
+    Merge summaries hierarchically to avoid 413 errors.
+
+    Instead of merging all chunks at once, merge in batches of batch_size,
+    then recursively merge the results until we have a single summary.
+    """
+    num_summaries = len(chunk_summaries)
+
+    if num_summaries <= 1:
+        return chunk_summaries[0] if chunk_summaries else ""
+
+    # If we have few enough summaries, try direct merge
+    if num_summaries <= batch_size:
+        try:
+            return merge_chunk_summaries(chunk_summaries, summary_type, total_commits, num_summaries)
+        except Exception as e:
+            if "413" in str(e) or "too large" in str(e).lower():
+                # Reduce batch size and retry
+                if batch_size > 2:
+                    print(f"⚠️ Payload too large with batch_size={batch_size}, reducing to {batch_size - 1}")
+                    return hierarchical_merge_summaries(chunk_summaries, summary_type, total_commits, batch_size - 1)
+            raise
+
+    # Merge in batches
+    print(f"🔄 Hierarchical merge: {num_summaries} summaries in batches of {batch_size}")
+    merged_batches = []
+
+    for i in range(0, num_summaries, batch_size):
+        batch = chunk_summaries[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
+        total_batches = (num_summaries + batch_size - 1) // batch_size
+        print(f"  📦 Merging batch {batch_num}/{total_batches} ({len(batch)} summaries)")
+
+        try:
+            merged = merge_chunk_summaries(batch, summary_type, total_commits, len(batch))
+            merged_batches.append(merged)
+        except Exception as e:
+            if "413" in str(e) or "too large" in str(e).lower():
+                # Try with smaller batch
+                print(f"  ⚠️ Batch too large, splitting further")
+                for sub_batch in [batch[:len(batch)//2], batch[len(batch)//2:]]:
+                    if sub_batch:
+                        sub_merged = hierarchical_merge_summaries(sub_batch, summary_type, total_commits, max(2, batch_size - 2))
+                        merged_batches.append(sub_merged)
+            else:
+                raise
+
+    # Recursively merge the merged batches
+    return hierarchical_merge_summaries(merged_batches, summary_type, total_commits, batch_size)
 
 # Process commits with chunking for large sets
 commits_formatted, commit_links = process_commits_in_chunks(commits_raw)
@@ -574,7 +636,7 @@ def generate_chunked_summary(commits_list, prompt_template, description, summary
     if len(chunk_summaries) == 1:
         return chunk_summaries[0]
     elif len(chunk_summaries) > 1:
-        return merge_chunk_summaries(chunk_summaries, summary_type, total_commits, len(chunk_summaries))
+        return hierarchical_merge_summaries(chunk_summaries, summary_type, total_commits)
     else:
         raise Exception(f"No {description} chunks were successfully generated")
 
