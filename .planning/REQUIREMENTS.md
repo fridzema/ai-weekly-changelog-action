@@ -46,10 +46,10 @@ Requirements for open source polish release. Each maps to roadmap phases.
 
 ### Code Fixes
 
-- [ ] **FIX-01**: Replace bare `except: pass` in temp file cleanup with specific exception
-- [ ] **FIX-02**: Replace bare `except:` in extended data reading with specific exception + logging
-- [ ] **FIX-03**: Add warning log when language fallback to English occurs
-- [ ] **FIX-04**: Add API key redaction in all error message paths
+- [x] **FIX-01**: Replace bare `except: pass` in temp file cleanup with specific exception ✓
+- [x] **FIX-02**: Replace bare `except:` in extended data reading with specific exception + logging ✓
+- [x] **FIX-03**: Add warning log when language fallback to English occurs ✓
+- [x] **FIX-04**: Add API key redaction in all error message paths ✓
 
 ## v2 Requirements
 
@@ -116,10 +116,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOC-05 | Phase 5 | Pending |
 | DOC-06 | Phase 5 | Pending |
 | DOC-07 | Phase 5 | Pending |
-| FIX-01 | Phase 1 | Pending |
-| FIX-02 | Phase 1 | Pending |
-| FIX-03 | Phase 1 | Pending |
-| FIX-04 | Phase 1 | Pending |
+| FIX-01 | Phase 1 | Complete ✓ |
+| FIX-02 | Phase 1 | Complete ✓ |
+| FIX-03 | Phase 1 | Complete ✓ |
+| FIX-04 | Phase 1 | Complete ✓ |
 
 **Coverage:**
 - v1 requirements: 29 total
@@ -128,4 +128,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after roadmap creation*
+*Last updated: 2026-02-03 after Phase 1 completion*
