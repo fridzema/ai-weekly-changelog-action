@@ -9,22 +9,22 @@ Requirements for open source polish release. Each maps to roadmap phases.
 
 ### Testing
 
-- [ ] **TEST-01**: pytest test suite configured with pyproject.toml
-- [ ] **TEST-02**: Tests for retry decorator (all error conditions: 429, 401, 404, timeout, network)
-- [ ] **TEST-03**: Tests for chunking algorithm (boundary conditions: 0, 1, 5, 6, 100+ commits)
-- [ ] **TEST-04**: Tests for changelog file writing (create, update, duplicate detection, force update)
-- [ ] **TEST-05**: Tests for language configuration lookup and fallback
-- [ ] **TEST-06**: 80%+ code coverage on core logic (src/generate_changelog.py)
+- [x] **TEST-01**: pytest test suite configured with pyproject.toml ✓
+- [x] **TEST-02**: Tests for retry decorator (all error conditions: 429, 401, 404, timeout, network) ✓
+- [x] **TEST-03**: Tests for chunking algorithm (boundary conditions: 0, 1, 5, 6, 100+ commits) ✓
+- [x] **TEST-04**: Tests for changelog file writing (create, update, duplicate detection, force update) ✓
+- [x] **TEST-05**: Tests for language configuration lookup and fallback ✓
+- [x] **TEST-06**: 80%+ code coverage on core logic (src/generate_changelog.py) ✓
 
 ### Code Quality
 
-- [ ] **QUAL-01**: Ruff linting configuration in pyproject.toml
-- [ ] **QUAL-02**: Ruff formatting applied to entire codebase
-- [ ] **QUAL-03**: All linting errors resolved (clean `ruff check`)
-- [ ] **QUAL-04**: Security scanning with bandit configured
-- [ ] **QUAL-05**: Dependency scanning with pip-audit configured
-- [ ] **QUAL-06**: Type hints added to all public functions
-- [ ] **QUAL-07**: mypy type checking configured and passing
+- [x] **QUAL-01**: Ruff linting configuration in pyproject.toml ✓
+- [x] **QUAL-02**: Ruff formatting applied to entire codebase ✓
+- [x] **QUAL-03**: All linting errors resolved (clean `ruff check`) ✓
+- [x] **QUAL-04**: Security scanning with Ruff S rules (replaces bandit) ✓
+- [x] **QUAL-05**: Dependency scanning with pip-audit configured ✓
+- [x] **QUAL-06**: Type hints added to all public functions ✓
+- [x] **QUAL-07**: mypy type checking configured and passing ✓
 
 ### CI/CD
 
@@ -91,19 +91,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 2 | Pending |
-| TEST-02 | Phase 2 | Pending |
-| TEST-03 | Phase 2 | Pending |
-| TEST-04 | Phase 2 | Pending |
-| TEST-05 | Phase 2 | Pending |
-| TEST-06 | Phase 2 | Pending |
-| QUAL-01 | Phase 3 | Pending |
-| QUAL-02 | Phase 3 | Pending |
-| QUAL-03 | Phase 3 | Pending |
-| QUAL-04 | Phase 3 | Pending |
-| QUAL-05 | Phase 3 | Pending |
-| QUAL-06 | Phase 3 | Pending |
-| QUAL-07 | Phase 3 | Pending |
+| TEST-01 | Phase 2 | Complete ✓ |
+| TEST-02 | Phase 2 | Complete ✓ |
+| TEST-03 | Phase 2 | Complete ✓ |
+| TEST-04 | Phase 2 | Complete ✓ |
+| TEST-05 | Phase 2 | Complete ✓ |
+| TEST-06 | Phase 2 | Complete ✓ |
+| QUAL-01 | Phase 3 | Complete ✓ |
+| QUAL-02 | Phase 3 | Complete ✓ |
+| QUAL-03 | Phase 3 | Complete ✓ |
+| QUAL-04 | Phase 3 | Complete ✓ |
+| QUAL-05 | Phase 3 | Complete ✓ |
+| QUAL-06 | Phase 3 | Complete ✓ |
+| QUAL-07 | Phase 3 | Complete ✓ |
 | CI-01 | Phase 4 | Pending |
 | CI-02 | Phase 4 | Pending |
 | CI-03 | Phase 4 | Pending |
@@ -128,4 +128,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 1 completion*
+*Last updated: 2026-02-03 after Phase 3 completion*
