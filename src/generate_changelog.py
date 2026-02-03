@@ -20,6 +20,159 @@ def redact_api_key(text: str) -> str:
     text = re.sub(r'sk-or-[a-zA-Z0-9_-]+', 'sk-or-...[REDACTED]', text)
     return text
 
+
+def process_commits_in_chunks(commits_raw, repo_url=None, chunk_size=50):
+    """Process commits in chunks to handle large commit sets efficiently.
+
+    Args:
+        commits_raw: Raw commit string with format: hash|subject|author|date|short_hash
+        repo_url: GitHub repository URL for commit links
+        chunk_size: Number of commits to process per chunk
+
+    Returns:
+        Tuple of (commits_formatted, commit_links)
+    """
+    if repo_url is None:
+        repo_url = f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'unknown')}"
+
+    lines = commits_raw.strip().split('\n') if commits_raw.strip() else []
+    local_commits_formatted = []
+    local_commit_links = []
+
+    # Process in smaller chunks to manage memory for very large sets
+    for i in range(0, len(lines), chunk_size):
+        chunk = lines[i:i + chunk_size]
+
+        for line in chunk:
+            if '|' in line:
+                parts = line.split('|')
+                if len(parts) >= 5:
+                    full_hash, subject, author, date, short_hash = parts[:5]
+                    local_commits_formatted.append(f"• {subject} ({author}, {date})")
+                    local_commit_links.append(f"- [{short_hash}]({repo_url}/commit/{full_hash}) {subject} - {author}")
+                else:
+                    local_commits_formatted.append(f"• {line}")
+                    local_commit_links.append(f"- {line}")
+            else:
+                local_commits_formatted.append(f"• {line}")
+                local_commit_links.append(f"- {line}")
+
+        # Progress indicator for very large sets
+        if len(lines) > 200 and i % (chunk_size * 4) == 0:
+            print(f"📊 Processed {min(i + chunk_size, len(lines))}/{len(lines)} commits...")
+
+    return local_commits_formatted, local_commit_links
+
+
+def get_language_config(language):
+    """Get language configuration for changelog generation.
+
+    Args:
+        language: Language name (English, Dutch, German, French, Spanish)
+
+    Returns:
+        Dict with language-specific labels and text
+    """
+    language_configs = {
+        "English": {
+            "week_label": "Week",
+            "generated_on": "Generated on",
+            "commits_label": "commits",
+            "tech_changes": "🔧 Technical Changes",
+            "user_impact": "📈 User Impact",
+            "all_commits": "📋 All Commits",
+            "statistics": "📊 Statistics",
+            "file_changes": "📁 File Changes",
+            "changelog_title": "Changelog",
+            "auto_updated": "This file is automatically updated with weekly changes.",
+            "fallback_tech": "Technical changes were made this week. See commit details below for specifics.",
+            "fallback_business": "Various improvements and updates were implemented this week.",
+            "lines_added": "lines added",
+            "lines_deleted": "lines deleted",
+            "files_changed": "files changed",
+            "force_updated": "(Force Updated)"
+        },
+        "Dutch": {
+            "week_label": "Week",
+            "generated_on": "Gegenereerd op",
+            "commits_label": "commits",
+            "tech_changes": "🔧 Technische wijzigingen",
+            "user_impact": "📈 Impact voor gebruikers",
+            "all_commits": "📋 Alle commits",
+            "statistics": "📊 Statistieken",
+            "file_changes": "📁 Bestandswijzigingen",
+            "changelog_title": "Changelog",
+            "auto_updated": "Dit bestand wordt automatisch bijgewerkt met wekelijkse wijzigingen.",
+            "fallback_tech": "Er zijn deze week technische wijzigingen doorgevoerd. Zie onderstaande commit details.",
+            "fallback_business": "Deze week zijn diverse verbeteringen en updates doorgevoerd.",
+            "lines_added": "regels toegevoegd",
+            "lines_deleted": "regels verwijderd",
+            "files_changed": "bestanden gewijzigd",
+            "force_updated": "(Geforceerd bijgewerkt)"
+        },
+        "German": {
+            "week_label": "Woche",
+            "generated_on": "Generiert am",
+            "commits_label": "Commits",
+            "tech_changes": "🔧 Technische Änderungen",
+            "user_impact": "📈 Benutzerauswirkung",
+            "all_commits": "📋 Alle Commits",
+            "statistics": "📊 Statistiken",
+            "file_changes": "📁 Dateiänderungen",
+            "changelog_title": "Changelog",
+            "auto_updated": "Diese Datei wird automatisch mit wöchentlichen Änderungen aktualisiert.",
+            "fallback_tech": "Diese Woche wurden technische Änderungen vorgenommen. Details siehe unten.",
+            "fallback_business": "Diese Woche wurden verschiedene Verbesserungen und Updates implementiert.",
+            "lines_added": "Zeilen hinzugefügt",
+            "lines_deleted": "Zeilen gelöscht",
+            "files_changed": "Dateien geändert",
+            "force_updated": "(Erzwungen aktualisiert)"
+        },
+        "French": {
+            "week_label": "Semaine",
+            "generated_on": "Généré le",
+            "commits_label": "commits",
+            "tech_changes": "🔧 Modifications techniques",
+            "user_impact": "📈 Impact utilisateur",
+            "all_commits": "📋 Tous les commits",
+            "statistics": "📊 Statistiques",
+            "file_changes": "📁 Changements de fichiers",
+            "changelog_title": "Journal des modifications",
+            "auto_updated": "Ce fichier est automatiquement mis à jour avec les changements hebdomadaires.",
+            "fallback_tech": "Des modifications techniques ont été apportées cette semaine. Voir les détails ci-dessous.",
+            "fallback_business": "Diverses améliorations et mises à jour ont été implémentées cette semaine.",
+            "lines_added": "lignes ajoutées",
+            "lines_deleted": "lignes supprimées",
+            "files_changed": "fichiers modifiés",
+            "force_updated": "(Mise à jour forcée)"
+        },
+        "Spanish": {
+            "week_label": "Semana",
+            "generated_on": "Generado el",
+            "commits_label": "commits",
+            "tech_changes": "🔧 Cambios técnicos",
+            "user_impact": "📈 Impacto del usuario",
+            "all_commits": "📋 Todos los commits",
+            "statistics": "📊 Estadísticas",
+            "file_changes": "📁 Cambios en archivos",
+            "changelog_title": "Registro de cambios",
+            "auto_updated": "Este archivo se actualiza automáticamente con cambios semanales.",
+            "fallback_tech": "Se realizaron cambios técnicos esta semana. Ver detalles de commits abajo.",
+            "fallback_business": "Se implementaron varias mejoras y actualizaciones esta semana.",
+            "lines_added": "líneas agregadas",
+            "lines_deleted": "líneas eliminadas",
+            "files_changed": "archivos cambiados",
+            "force_updated": "(Actualización forzada)"
+        }
+    }
+
+    if language not in language_configs:
+        print(f"⚠️  Warning: Language '{language}' not supported. Falling back to English.")
+        print(f"💡 Supported languages: {', '.join(language_configs.keys())}")
+        return language_configs["English"]
+
+    return language_configs[language]
+
 def retry_api_call(max_retries=3, delay=2, timeout=30):
     """Decorator to retry API calls with exponential backoff, jitter, and rate limiting handling"""
     def decorator(func):
@@ -98,6 +251,17 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
     return decorator
 
 
+def cleanup_temp_files():
+    """Clean up temporary files to free memory"""
+    temp_files = ['commits.txt', 'commits_extended.txt', 'files_changed.txt', 'lines_added.tmp', 'lines_deleted.tmp']
+    for temp_file in temp_files:
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except OSError as e:
+            print(f"Warning: Could not remove temp file {temp_file}: {e}")
+
+
 if __name__ == "__main__":
     # Check if API key is present with detailed guidance
     api_key = os.getenv("OPENROUTER_API_KEY")
@@ -135,106 +299,8 @@ if __name__ == "__main__":
     print(f"🧪 Dry run mode: {dry_run}")
     print(f"🔍 Extended analysis: {extended_analysis}")
 
-    # Language-specific configurations
-    language_configs = {
-        "English": {
-            "week_label": "Week",
-            "generated_on": "Generated on",
-            "commits_label": "commits",
-            "tech_changes": "🔧 Technical Changes",
-            "user_impact": "📈 User Impact",
-            "all_commits": "📋 All Commits",
-            "statistics": "📊 Statistics",
-            "file_changes": "📁 File Changes",
-            "changelog_title": "Changelog",
-            "auto_updated": "This file is automatically updated with weekly changes.",
-            "fallback_tech": "Technical changes were made this week. See commit details below for specifics.",
-            "fallback_business": "Various improvements and updates were implemented this week.",
-            "lines_added": "lines added",
-            "lines_deleted": "lines deleted",
-            "files_changed": "files changed",
-            "force_updated": "(Force Updated)"
-        },
-        "Dutch": {
-            "week_label": "Week",
-            "generated_on": "Gegenereerd op",
-            "commits_label": "commits",
-            "tech_changes": "🔧 Technische wijzigingen",
-            "user_impact": "📈 Impact voor gebruikers",
-            "all_commits": "📋 Alle commits",
-            "statistics": "📊 Statistieken",
-            "file_changes": "📁 Bestandswijzigingen",
-            "changelog_title": "Changelog",
-            "auto_updated": "Dit bestand wordt automatisch bijgewerkt met wekelijkse wijzigingen.",
-            "fallback_tech": "Er zijn deze week technische wijzigingen doorgevoerd. Zie onderstaande commit details.",
-            "fallback_business": "Verschillende verbeteringen en updates zijn deze week geïmplementeerd.",
-            "lines_added": "regels toegevoegd",
-            "lines_deleted": "regels verwijderd",
-            "files_changed": "bestanden gewijzigd",
-            "force_updated": "(Geforceerd bijgewerkt)"
-        },
-        "German": {
-            "week_label": "Woche",
-            "generated_on": "Generiert am",
-            "commits_label": "Commits",
-            "tech_changes": "🔧 Technische Änderungen",
-            "user_impact": "📈 Auswirkungen für Benutzer",
-            "all_commits": "📋 Alle Commits",
-            "statistics": "📊 Statistiken",
-            "file_changes": "📁 Dateiänderungen",
-            "changelog_title": "Changelog",
-            "auto_updated": "Diese Datei wird automatisch mit wöchentlichen Änderungen aktualisiert.",
-            "fallback_tech": "Diese Woche wurden technische Änderungen vorgenommen. Details siehe Commits unten.",
-            "fallback_business": "Verschiedene Verbesserungen und Updates wurden diese Woche implementiert.",
-            "lines_added": "Zeilen hinzugefügt",
-            "lines_deleted": "Zeilen gelöscht",
-            "files_changed": "Dateien geändert",
-            "force_updated": "(Zwangsweise aktualisiert)"
-        },
-        "French": {
-            "week_label": "Semaine",
-            "generated_on": "Généré le",
-            "commits_label": "commits",
-            "tech_changes": "🔧 Modifications techniques",
-            "user_impact": "📈 Impact utilisateur",
-            "all_commits": "📋 Tous les commits",
-            "statistics": "📊 Statistiques",
-            "file_changes": "📁 Modifications de fichiers",
-            "changelog_title": "Journal des modifications",
-            "auto_updated": "Ce fichier est automatiquement mis à jour avec les modifications hebdomadaires.",
-            "fallback_tech": "Des modifications techniques ont été apportées cette semaine. Voir les détails des commits ci-dessous.",
-            "fallback_business": "Diverses améliorations et mises à jour ont été implémentées cette semaine.",
-            "lines_added": "lignes ajoutées",
-            "lines_deleted": "lignes supprimées",
-            "files_changed": "fichiers modifiés",
-            "force_updated": "(Mise à jour forcée)"
-        },
-        "Spanish": {
-            "week_label": "Semana",
-            "generated_on": "Generado el",
-            "commits_label": "commits",
-            "tech_changes": "🔧 Cambios técnicos",
-            "user_impact": "📈 Impacto del usuario",
-            "all_commits": "📋 Todos los commits",
-            "statistics": "📊 Estadísticas",
-            "file_changes": "📁 Cambios en archivos",
-            "changelog_title": "Registro de cambios",
-            "auto_updated": "Este archivo se actualiza automáticamente con cambios semanales.",
-            "fallback_tech": "Se realizaron cambios técnicos esta semana. Ver detalles de commits abajo.",
-            "fallback_business": "Se implementaron varias mejoras y actualizaciones esta semana.",
-            "lines_added": "líneas agregadas",
-            "lines_deleted": "líneas eliminadas",
-            "files_changed": "archivos cambiados",
-            "force_updated": "(Actualización forzada)"
-        }
-    }
-
-    if output_language not in language_configs:
-        print(f"⚠️  Warning: Language '{output_language}' not supported. Falling back to English.")
-        print(f"💡 Supported languages: {', '.join(language_configs.keys())}")
-        config = language_configs["English"]
-    else:
-        config = language_configs[output_language]
+    # Get language-specific configuration
+    config = get_language_config(output_language)
 
     # Read commits
     try:
@@ -292,50 +358,6 @@ if __name__ == "__main__":
         except (FileNotFoundError, PermissionError, UnicodeDecodeError, IOError) as e:
             print(f"⚠️  Warning: Extended analysis data unavailable ({type(e).__name__}): {e}")
 
-    # Format commits for better readability with streaming support
-    commits_formatted = []
-    commit_links = []
-    repo_url = f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'unknown')}"
-
-    def process_commits_in_chunks(commits_raw, chunk_size=50):
-        """Process commits in chunks to handle large commit sets efficiently"""
-        lines = commits_raw.strip().split('\n')
-        local_commits_formatted = []
-        local_commit_links = []
-    
-        # Process in smaller chunks to manage memory for very large sets
-        for i in range(0, len(lines), chunk_size):
-            chunk = lines[i:i + chunk_size]
-        
-            for line in chunk:
-                if '|' in line:
-                    parts = line.split('|')
-                    if len(parts) >= 5:
-                        full_hash, subject, author, date, short_hash = parts[:5]
-                        local_commits_formatted.append(f"• {subject} ({author}, {date})")
-                        local_commit_links.append(f"- [{short_hash}]({repo_url}/commit/{full_hash}) {subject} - {author}")
-                    else:
-                        local_commits_formatted.append(f"• {line}")
-                        local_commit_links.append(f"- {line}")
-                else:
-                    local_commits_formatted.append(f"• {line}")
-                    local_commit_links.append(f"- {line}")
-        
-            # Progress indicator for very large sets
-            if len(lines) > 200 and i % (chunk_size * 4) == 0:
-                print(f"📊 Processed {min(i + chunk_size, len(lines))}/{len(lines)} commits...")
-    
-        return local_commits_formatted, local_commit_links
-
-    def cleanup_temp_files():
-        """Clean up temporary files to free memory"""
-        temp_files = ['commits.txt', 'commits_extended.txt', 'files_changed.txt', 'lines_added.tmp', 'lines_deleted.tmp']
-        for temp_file in temp_files:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-            except OSError as e:
-                print(f"Warning: Could not remove temp file {temp_file}: {e}")
 
     @retry_api_call(max_retries=3, delay=2, timeout=30)
     def merge_chunk_summaries(chunk_summaries, summary_type, total_commits, num_chunks):
@@ -455,7 +477,8 @@ if __name__ == "__main__":
         return hierarchical_merge_summaries(merged_batches, summary_type, total_commits, batch_size)
 
     # Process commits with chunking for large sets
-    commits_formatted, commit_links = process_commits_in_chunks(commits_raw)
+    repo_url = f"https://github.com/{os.getenv('GITHUB_REPOSITORY', 'unknown')}"
+    commits_formatted, commit_links = process_commits_in_chunks(commits_raw, repo_url)
     total_commits = len(commits_formatted)
 
     # Commit count validation and diagnostics
