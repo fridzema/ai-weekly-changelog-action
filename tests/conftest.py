@@ -1,8 +1,9 @@
 """Shared pytest fixtures and configuration for all tests."""
 
 import os
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)

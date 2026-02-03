@@ -1,6 +1,7 @@
 """Tests for commit chunking algorithm and decision logic."""
 
 import pytest
+
 from src.generate_changelog import process_commits_in_chunks
 
 

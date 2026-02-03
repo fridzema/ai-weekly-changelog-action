@@ -1,8 +1,9 @@
 """Tests for changelog file operations and format validation."""
 
 import os
+
 import pytest
-from pathlib import Path
+
 from src.generate_changelog import cleanup_temp_files, process_commits_in_chunks
 
 
@@ -159,7 +160,7 @@ class TestChangelogFormatLogic:
         week_header = f"## {config['week_label']} {week_num}, {year}"
 
         # Simulate existing changelog content
-        existing_content = f"""# Changelog
+        existing_content = """# Changelog
 
 This file is automatically updated.
 
@@ -186,8 +187,9 @@ Some changes
 
     def test_changelog_entry_structure(self):
         """Test that changelog entry has required structure elements."""
-        from src.generate_changelog import get_language_config
         import textwrap
+
+        from src.generate_changelog import get_language_config
 
         config = get_language_config("English")
         week_num = 5
@@ -289,6 +291,7 @@ class TestLanguageConfigChangelogKeys:
     def test_date_format_per_language(self):
         """Test that date format is correct for each language."""
         import datetime
+
         from src.generate_changelog import get_language_config
 
         # Date formats used in the code

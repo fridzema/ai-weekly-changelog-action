@@ -1,7 +1,5 @@
 """Tests for API key redaction functionality."""
 
-import os
-import pytest
 from src.generate_changelog import redact_api_key
 
 

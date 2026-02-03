@@ -1,8 +1,8 @@
 """Tests for language configuration lookup and fallback."""
 
+
 import pytest
-from io import StringIO
-import sys
+
 from src.generate_changelog import get_language_config
 
 

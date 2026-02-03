@@ -1,7 +1,9 @@
 """Tests for retry decorator functionality."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch
+
 from src.generate_changelog import retry_api_call
 
 

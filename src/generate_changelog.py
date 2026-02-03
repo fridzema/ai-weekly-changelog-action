@@ -1,10 +1,11 @@
-import os
-import sys
 import datetime
+import os
+import re
+import sys
 import textwrap
 import time
-import re
 from functools import wraps
+
 from openai import OpenAI
 
 
@@ -16,7 +17,6 @@ def redact_api_key(text: str) -> str:
         redacted = api_key[:4] + "..." + "[REDACTED]"
         text = text.replace(api_key, redacted)
     # Also catch common API key patterns that might appear
-    import re
 
     # Redact any sk-or-* pattern (OpenRouter keys)
     text = re.sub(r"sk-or-[a-zA-Z0-9_-]+", "sk-or-...[REDACTED]", text)
@@ -207,11 +207,11 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                                 f"❌ Rate limit exceeded after {max_retries} attempts."
                             )
                             print(
-                                f"💡 Suggestion: Try again in a few minutes, or consider using a different model with higher rate limits."
+                                "💡 Suggestion: Try again in a few minutes, or consider using a different model with higher rate limits."
                             )
                             raise Exception(
                                 f"Rate limit exceeded: {redact_api_key(str(e))}"
-                            )
+                            ) from e
 
                         # Longer wait for rate limiting with jitter
                         wait_time = delay * (3**attempt) + random.uniform(1, 5)
@@ -229,12 +229,12 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                     ):
                         print(f"❌ Authentication failed: {redact_api_key(str(e))}")
                         print(
-                            f"💡 Please check your OPENROUTER_API_KEY secret is correctly set."
+                            "💡 Please check your OPENROUTER_API_KEY secret is correctly set."
                         )
-                        print(f"💡 Verify your API key at: https://openrouter.ai/keys")
+                        print("💡 Verify your API key at: https://openrouter.ai/keys")
                         raise Exception(
                             f"Authentication error: {redact_api_key(str(e))}"
-                        )
+                        ) from e
 
                     # Handle model not found errors
                     if (
@@ -247,14 +247,14 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                             f"💡 The model '{os.getenv('MODEL', 'openai/gpt-5-mini')}' may not be available."
                         )
                         print(
-                            f"💡 Check available models at: https://openrouter.ai/models"
+                            "💡 Check available models at: https://openrouter.ai/models"
                         )
                         print(
-                            f"💡 Consider using 'openai/gpt-5-mini' or 'anthropic/claude-3-haiku' as alternatives."
+                            "💡 Consider using 'openai/gpt-5-mini' or 'anthropic/claude-3-haiku' as alternatives."
                         )
                         raise Exception(
                             f"Model availability error: {redact_api_key(str(e))}"
-                        )
+                        ) from e
 
                     # Handle payload too large errors
                     if (
@@ -264,11 +264,11 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                     ):
                         print(f"❌ Request payload too large: {redact_api_key(str(e))}")
                         print(
-                            f"💡 The merge payload exceeds API limits. Hierarchical merge will be attempted."
+                            "💡 The merge payload exceeds API limits. Hierarchical merge will be attempted."
                         )
                         raise Exception(
                             f"Payload too large error: {redact_api_key(str(e))}"
-                        )
+                        ) from e
 
                     # Handle network errors
                     if (
@@ -281,9 +281,11 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                                 f"❌ Network connectivity issues persisted after {max_retries} attempts."
                             )
                             print(
-                                f"💡 Check your internet connection and GitHub Actions network status."
+                                "💡 Check your internet connection and GitHub Actions network status."
                             )
-                            raise Exception(f"Network error: {redact_api_key(str(e))}")
+                            raise Exception(
+                                f"Network error: {redact_api_key(str(e))}"
+                            ) from e
 
                         wait_time = delay * (2**attempt) + random.uniform(0.5, 2)
                         print(
@@ -297,11 +299,11 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
                     if attempt == max_retries - 1:
                         print(f"❌ Final attempt failed: {redact_api_key(str(e))}")
                         print(
-                            f"💡 If this persists, check the action logs and consider:"
+                            "💡 If this persists, check the action logs and consider:"
                         )
-                        print(f"   - Reducing the days_back parameter")
-                        print(f"   - Using a different model")
-                        print(f"   - Checking OpenRouter service status")
+                        print("   - Reducing the days_back parameter")
+                        print("   - Using a different model")
+                        print("   - Checking OpenRouter service status")
                         raise
 
                     # Exponential backoff with jitter for other errors
@@ -381,7 +383,7 @@ if __name__ == "__main__":
 
     # Read commits
     try:
-        with open("commits.txt", "r", encoding="utf-8") as f:
+        with open("commits.txt", encoding="utf-8") as f:
             commits_raw = f.read().strip()
     except FileNotFoundError:
         print("❌ commits.txt not found")
@@ -399,12 +401,12 @@ if __name__ == "__main__":
         try:
             # Read detailed commit info
             if os.path.exists("commits_extended.txt"):
-                with open("commits_extended.txt", "r", encoding="utf-8") as f:
+                with open("commits_extended.txt", encoding="utf-8") as f:
                     extended_data = f.read().strip()
 
             # Read file changes
             if os.path.exists("files_changed.txt"):
-                with open("files_changed.txt", "r", encoding="utf-8") as f:
+                with open("files_changed.txt", encoding="utf-8") as f:
                     files_list = f.read().strip().split("\n")
                     # Group files by type/directory
                     file_groups = {}
@@ -436,7 +438,7 @@ if __name__ == "__main__":
                             )
 
                     file_changes_data = "\n".join(file_changes_summary)
-        except (FileNotFoundError, PermissionError, UnicodeDecodeError, IOError) as e:
+        except (OSError, FileNotFoundError, PermissionError, UnicodeDecodeError) as e:
             print(
                 f"⚠️  Warning: Extended analysis data unavailable ({type(e).__name__}): {e}"
             )
@@ -573,7 +575,7 @@ if __name__ == "__main__":
             except Exception as e:
                 if "413" in str(e) or "too large" in str(e).lower():
                     # Try with smaller batch
-                    print(f"  ⚠️ Batch too large, splitting further")
+                    print("  ⚠️ Batch too large, splitting further")
                     for sub_batch in [
                         batch[: len(batch) // 2],
                         batch[len(batch) // 2 :],
@@ -614,9 +616,9 @@ if __name__ == "__main__":
             print(
                 f"⚠️  Warning: Only found {total_commits} commits for {days_back} days - this may indicate:"
             )
-            print(f"   - Git fetch depth limitation (increase fetch-depth in workflow)")
-            print(f"   - Actual low activity period")
-            print(f"   - Git filters may be too aggressive")
+            print("   - Git fetch depth limitation (increase fetch-depth in workflow)")
+            print("   - Actual low activity period")
+            print("   - Git filters may be too aggressive")
 
     # Intelligent chunking system for large commit sets
     COMMITS_PER_CHUNK = 5  # Small chunks for highly detailed analysis
@@ -633,7 +635,7 @@ if __name__ == "__main__":
             f"🔄 Will analyze in {num_chunks} chunks of ~{COMMITS_PER_CHUNK} commits each for detailed analysis"
         )
         print(
-            f"💡 This approach ensures each commit gets focused attention before merging into comprehensive summary"
+            "💡 This approach ensures each commit gets focused attention before merging into comprehensive summary"
         )
         chunks_info = f"\n\n> 📊 **Note**: This changelog was generated by analyzing {total_commits} commits across {num_chunks} detailed chunks for comprehensive, high-quality coverage."
     else:
@@ -644,7 +646,7 @@ if __name__ == "__main__":
     # Build base context for extended analysis (used in all chunks)
     extended_context = ""
     if extended_analysis and extended_data:
-        extended_context = f"\n\nDetailed file changes and statistics are also available for deeper analysis."
+        extended_context = "\n\nDetailed file changes and statistics are also available for deeper analysis."
         if file_changes_data:
             # Limit file changes data to prevent oversized prompts (413 errors)
             MAX_FILE_CHANGES_CHARS = 5000
@@ -915,7 +917,7 @@ if __name__ == "__main__":
 
     try:
         if os.path.exists(changelog_path):
-            with open(changelog_path, "r", encoding="utf-8") as f:
+            with open(changelog_path, encoding="utf-8") as f:
                 existing_content = f.read()
 
             if week_header in existing_content and not force_update:
@@ -961,7 +963,7 @@ if __name__ == "__main__":
             stats_section = f"""
     ### {config["statistics"]}
     - **{lines_added}** {config["lines_added"]}
-    - **{lines_deleted}** {config["lines_deleted"]} 
+    - **{lines_deleted}** {config["lines_deleted"]}
     - **{files_changed}** {config["files_changed"]}
     """
 
@@ -1016,10 +1018,10 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"❌ Error writing changelog: {redact_api_key(str(e))}")
-        print(f"💡 Common causes:")
-        print(f"   - File permissions issue")
-        print(f"   - Disk space issue")
-        print(f"   - Invalid markdown content")
+        print("💡 Common causes:")
+        print("   - File permissions issue")
+        print("   - Disk space issue")
+        print("   - Invalid markdown content")
         cleanup_temp_files()
         sys.exit(1)
 
