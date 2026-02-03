@@ -14,8 +14,13 @@ class TestCleanupTempFiles:
         monkeypatch.chdir(tmp_path)
 
         # Create temp files
-        temp_files = ['commits.txt', 'commits_extended.txt', 'files_changed.txt',
-                      'lines_added.tmp', 'lines_deleted.tmp']
+        temp_files = [
+            "commits.txt",
+            "commits_extended.txt",
+            "files_changed.txt",
+            "lines_added.tmp",
+            "lines_deleted.tmp",
+        ]
         for filename in temp_files:
             (tmp_path / filename).write_text("test content")
 
@@ -54,7 +59,7 @@ class TestCleanupTempFiles:
         test_file.chmod(0o444)
 
         # Make directory read-only to prevent deletion (platform-specific)
-        if os.name != 'nt':  # Unix-like systems
+        if os.name != "nt":  # Unix-like systems
             tmp_path.chmod(0o555)
 
             try:
@@ -198,15 +203,15 @@ Some changes
         changelog_entry = textwrap.dedent(f"""
     {week_header}
 
-    *{config['generated_on']} {formatted_date} - {num_commits} {config['commits_label']}*
+    *{config["generated_on"]} {formatted_date} - {num_commits} {config["commits_label"]}*
 
-    ### {config['tech_changes']}
+    ### {config["tech_changes"]}
     {tech_summary}
 
-    ### {config['user_impact']}
+    ### {config["user_impact"]}
     {business_summary}
 
-    ### {config['all_commits']}
+    ### {config["all_commits"]}
     {commits_links}
 
     ---
@@ -214,10 +219,10 @@ Some changes
 
         # Verify structure
         assert week_header in changelog_entry
-        assert config['generated_on'] in changelog_entry
-        assert config['tech_changes'] in changelog_entry
-        assert config['user_impact'] in changelog_entry
-        assert config['all_commits'] in changelog_entry
+        assert config["generated_on"] in changelog_entry
+        assert config["tech_changes"] in changelog_entry
+        assert config["user_impact"] in changelog_entry
+        assert config["all_commits"] in changelog_entry
         assert tech_summary in changelog_entry
         assert business_summary in changelog_entry
         assert "---" in changelog_entry
@@ -248,7 +253,9 @@ Some changes
 class TestLanguageConfigChangelogKeys:
     """Tests for language-specific changelog configurations."""
 
-    @pytest.mark.parametrize("language", ["English", "Dutch", "German", "French", "Spanish"])
+    @pytest.mark.parametrize(
+        "language", ["English", "Dutch", "German", "French", "Spanish"]
+    )
     def test_language_config_has_changelog_keys(self, language):
         """Test that each language config has all required changelog keys."""
         from src.generate_changelog import get_language_config
@@ -272,7 +279,7 @@ class TestLanguageConfigChangelogKeys:
             "lines_added",
             "lines_deleted",
             "files_changed",
-            "force_updated"
+            "force_updated",
         ]
 
         for key in required_keys:
@@ -290,7 +297,7 @@ class TestLanguageConfigChangelogKeys:
             "Dutch": "%d-%m-%Y",
             "German": "%d.%m.%Y",
             "French": "%d/%m/%Y",
-            "Spanish": "%d/%m/%Y"
+            "Spanish": "%d/%m/%Y",
         }
 
         test_date = datetime.date(2024, 1, 15)
@@ -300,13 +307,14 @@ class TestLanguageConfigChangelogKeys:
             "Dutch": "15-01-2024",
             "German": "15.01.2024",
             "French": "15/01/2024",
-            "Spanish": "15/01/2024"
+            "Spanish": "15/01/2024",
         }
 
         for language, date_format in date_formats.items():
             formatted = test_date.strftime(date_format)
-            assert formatted == expected_formats[language], \
+            assert formatted == expected_formats[language], (
                 f"Language '{language}' date format mismatch"
+            )
 
             # Also verify the language config can be retrieved
             config = get_language_config(language)

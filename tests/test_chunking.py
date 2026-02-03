@@ -11,8 +11,10 @@ def make_commits(count):
     for i in range(count):
         hash_full = f"a{'0' * 39}{i:04d}"
         hash_short = f"a{i:03d}"
-        commits.append(f"{hash_full}|feat: Feature {i}|Author{i}|2024-01-{(i % 28) + 1:02d}|{hash_short}")
-    return '\n'.join(commits)
+        commits.append(
+            f"{hash_full}|feat: Feature {i}|Author{i}|2024-01-{(i % 28) + 1:02d}|{hash_short}"
+        )
+    return "\n".join(commits)
 
 
 class TestProcessCommitsInChunks:
@@ -94,14 +96,17 @@ class TestProcessCommitsInChunks:
 class TestChunkingDecisionBoundary:
     """Test the chunking decision logic boundaries."""
 
-    @pytest.mark.parametrize("commit_count,should_chunk", [
-        (0, False),   # Empty
-        (1, False),   # Single commit
-        (5, False),   # At threshold
-        (6, True),    # Above threshold
-        (10, True),   # Well above
-        (100, True),  # Large set
-    ])
+    @pytest.mark.parametrize(
+        "commit_count,should_chunk",
+        [
+            (0, False),  # Empty
+            (1, False),  # Single commit
+            (5, False),  # At threshold
+            (6, True),  # Above threshold
+            (10, True),  # Well above
+            (100, True),  # Large set
+        ],
+    )
     def test_chunking_threshold(self, commit_count, should_chunk):
         """Test that chunking decision matches expected behavior.
 
@@ -111,12 +116,15 @@ class TestChunkingDecisionBoundary:
         COMMITS_PER_CHUNK = 5  # Mirror the constant from source
         use_chunking = commit_count > COMMITS_PER_CHUNK
 
-        assert use_chunking == should_chunk, \
+        assert use_chunking == should_chunk, (
             f"Expected chunking={should_chunk} for {commit_count} commits, got {use_chunking}"
+        )
 
         # Calculate expected chunk count
         if use_chunking:
-            expected_chunks = (commit_count + COMMITS_PER_CHUNK - 1) // COMMITS_PER_CHUNK
+            expected_chunks = (
+                commit_count + COMMITS_PER_CHUNK - 1
+            ) // COMMITS_PER_CHUNK
             assert expected_chunks > 0
         else:
             expected_chunks = 0
@@ -124,4 +132,5 @@ class TestChunkingDecisionBoundary:
         # Verify the math matches ceiling division
         if commit_count > COMMITS_PER_CHUNK:
             import math
+
             assert expected_chunks == math.ceil(commit_count / COMMITS_PER_CHUNK)

@@ -9,12 +9,13 @@ from src.generate_changelog import retry_api_call
 @pytest.fixture(autouse=True)
 def mock_sleep():
     """Mock time.sleep to make tests run instantly."""
-    with patch('time.sleep') as mock:
+    with patch("time.sleep") as mock:
         yield mock
 
 
 def test_retry_success_first_attempt():
     """Test successful API call on first attempt."""
+
     @retry_api_call(max_retries=3)
     def successful_call():
         return "success"
@@ -42,6 +43,7 @@ def test_retry_rate_limit_429_then_success():
 
 def test_retry_rate_limit_exhaustion():
     """Test that rate limit exhaustion raises exception."""
+
     @retry_api_call(max_retries=3, delay=1)
     def always_rate_limited():
         raise Exception("429 Rate limit exceeded")
@@ -160,6 +162,7 @@ def test_retry_generic_error_then_success():
 
 def test_retry_returns_none_when_all_succeed_without_return():
     """Test that decorator returns None if function doesn't return anything."""
+
     @retry_api_call(max_retries=3)
     def void_function():
         pass
@@ -190,6 +193,7 @@ def test_retry_with_multiple_error_types():
 
 def test_retry_preserves_function_name():
     """Test that decorator preserves function name and docstring."""
+
     @retry_api_call(max_retries=3)
     def my_function():
         """This is my function."""

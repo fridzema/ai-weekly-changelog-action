@@ -9,13 +9,16 @@ from src.generate_changelog import get_language_config
 class TestLanguageConfigurations:
     """Test language-specific configurations."""
 
-    @pytest.mark.parametrize("language,week_label,tech_label", [
-        ("English", "Week", "🔧 Technical Changes"),
-        ("Dutch", "Week", "🔧 Technische wijzigingen"),
-        ("German", "Woche", "🔧 Technische Änderungen"),
-        ("French", "Semaine", "🔧 Modifications techniques"),
-        ("Spanish", "Semana", "🔧 Cambios técnicos"),
-    ])
+    @pytest.mark.parametrize(
+        "language,week_label,tech_label",
+        [
+            ("English", "Week", "🔧 Technical Changes"),
+            ("Dutch", "Week", "🔧 Technische wijzigingen"),
+            ("German", "Woche", "🔧 Technische Änderungen"),
+            ("French", "Semaine", "🔧 Modifications techniques"),
+            ("Spanish", "Semana", "🔧 Cambios técnicos"),
+        ],
+    )
     def test_supported_languages(self, language, week_label, tech_label):
         """Test that each supported language returns correct configuration."""
         config = get_language_config(language)
@@ -47,7 +50,7 @@ class TestLanguageConfigurations:
             "lines_added",
             "lines_deleted",
             "files_changed",
-            "force_updated"
+            "force_updated",
         }
 
         supported_languages = ["English", "Dutch", "German", "French", "Spanish"]
@@ -58,15 +61,16 @@ class TestLanguageConfigurations:
 
             # Check all required keys are present
             missing_keys = required_keys - config_keys
-            assert not missing_keys, \
+            assert not missing_keys, (
                 f"Language '{language}' is missing keys: {missing_keys}"
+            )
 
             # Verify all values are non-empty strings
             for key, value in config.items():
-                assert isinstance(value, str), \
+                assert isinstance(value, str), (
                     f"Language '{language}' key '{key}' is not a string: {type(value)}"
-                assert value.strip(), \
-                    f"Language '{language}' key '{key}' is empty"
+                )
+                assert value.strip(), f"Language '{language}' key '{key}' is empty"
 
     def test_unsupported_language_fallback(self, capsys):
         """Test that unsupported language falls back to English with warning."""
@@ -145,10 +149,12 @@ class TestLanguageConfigurations:
 
             # Technical fallback
             assert config["fallback_tech"]
-            assert len(config["fallback_tech"]) > 20, \
+            assert len(config["fallback_tech"]) > 20, (
                 f"Language '{language}' fallback_tech is too short"
+            )
 
             # Business fallback
             assert config["fallback_business"]
-            assert len(config["fallback_business"]) > 20, \
+            assert len(config["fallback_business"]) > 20, (
                 f"Language '{language}' fallback_business is too short"
+            )

@@ -72,7 +72,9 @@ def test_redact_multiple_occurrences(monkeypatch):
     assert test_key not in redacted
     # Should contain multiple redacted versions
     redacted_count = redacted.count("[REDACTED]")
-    assert redacted_count >= 2, f"Expected at least 2 redactions, found {redacted_count}"
+    assert redacted_count >= 2, (
+        f"Expected at least 2 redactions, found {redacted_count}"
+    )
 
 
 def test_redact_short_key_not_redacted(monkeypatch):
