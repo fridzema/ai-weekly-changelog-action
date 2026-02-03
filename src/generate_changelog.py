@@ -269,8 +269,8 @@ if extended_analysis:
                         file_changes_summary.append(f"**{group}** ({len(files)} files): {examples}, ...")
 
                 file_changes_data = '\n'.join(file_changes_summary)
-    except Exception as e:
-        print(f"⚠️  Could not read extended data: {e}")
+    except (FileNotFoundError, PermissionError, UnicodeDecodeError, IOError) as e:
+        print(f"⚠️  Warning: Extended analysis data unavailable ({type(e).__name__}): {e}")
 
 # Format commits for better readability with streaming support
 commits_formatted = []
@@ -314,8 +314,8 @@ def cleanup_temp_files():
         try:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
-        except:
-            pass
+        except OSError as e:
+            print(f"Warning: Could not remove temp file {temp_file}: {e}")
 
 @retry_api_call(max_retries=3, delay=2, timeout=30)
 def merge_chunk_summaries(chunk_summaries, summary_type, total_commits, num_chunks):
