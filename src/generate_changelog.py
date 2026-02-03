@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import os
 import re
@@ -5,8 +7,11 @@ import sys
 import textwrap
 import time
 from functools import wraps
+from typing import Any, Callable, TypeVar
 
 from openai import OpenAI
+
+T = TypeVar("T")
 
 
 def redact_api_key(text: str) -> str:
@@ -23,7 +28,9 @@ def redact_api_key(text: str) -> str:
     return text
 
 
-def process_commits_in_chunks(commits_raw, repo_url=None, chunk_size=50):
+def process_commits_in_chunks(
+    commits_raw: str, repo_url: str | None = None, chunk_size: int = 50
+) -> tuple[list[str], list[str]]:
     """Process commits in chunks to handle large commit sets efficiently.
 
     Args:
@@ -70,7 +77,7 @@ def process_commits_in_chunks(commits_raw, repo_url=None, chunk_size=50):
     return local_commits_formatted, local_commit_links
 
 
-def get_language_config(language):
+def get_language_config(language: str) -> dict[str, str]:
     """Get language configuration for changelog generation.
 
     Args:
@@ -182,12 +189,14 @@ def get_language_config(language):
     return language_configs[language]
 
 
-def retry_api_call(max_retries=3, delay=2, timeout=30):
+def retry_api_call(
+    max_retries: int = 3, delay: int = 2, timeout: int = 30
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to retry API calls with exponential backoff, jitter, and rate limiting handling"""
 
-    def decorator(func):
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> T | None:
             import random
 
             for attempt in range(max_retries):
@@ -320,7 +329,7 @@ def retry_api_call(max_retries=3, delay=2, timeout=30):
     return decorator
 
 
-def cleanup_temp_files():
+def cleanup_temp_files() -> None:
     """Clean up temporary files to free memory"""
     temp_files = [
         "commits.txt",
