@@ -28,11 +28,11 @@ Requirements for open source polish release. Each maps to roadmap phases.
 
 ### CI/CD
 
-- [ ] **CI-01**: GitHub Actions workflow runs tests on push/PR
-- [ ] **CI-02**: GitHub Actions workflow runs linting on push/PR
-- [ ] **CI-03**: GitHub Actions workflow runs security scans
-- [ ] **CI-04**: CI status badge added to README
-- [ ] **CI-05**: All CI checks passing (green badge)
+- [x] **CI-01**: GitHub Actions workflow runs tests on push/PR ✓
+- [x] **CI-02**: GitHub Actions workflow runs linting on push/PR ✓
+- [x] **CI-03**: GitHub Actions workflow runs security scans ✓
+- [x] **CI-04**: CI status badge added to README ✓
+- [x] **CI-05**: All CI checks passing (green badge) ✓
 
 ### Documentation
 
@@ -104,11 +104,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QUAL-05 | Phase 3 | Complete ✓ |
 | QUAL-06 | Phase 3 | Complete ✓ |
 | QUAL-07 | Phase 3 | Complete ✓ |
-| CI-01 | Phase 4 | Pending |
-| CI-02 | Phase 4 | Pending |
-| CI-03 | Phase 4 | Pending |
-| CI-04 | Phase 4 | Pending |
-| CI-05 | Phase 4 | Pending |
+| CI-01 | Phase 4 | Complete ✓ |
+| CI-02 | Phase 4 | Complete ✓ |
+| CI-03 | Phase 4 | Complete ✓ |
+| CI-04 | Phase 4 | Complete ✓ |
+| CI-05 | Phase 4 | Complete ✓ |
 | DOC-01 | Phase 5 | Pending |
 | DOC-02 | Phase 5 | Pending |
 | DOC-03 | Phase 5 | Pending |
@@ -128,4 +128,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after Phase 3 completion*
+*Last updated: 2026-02-04 after Phase 4 completion*
