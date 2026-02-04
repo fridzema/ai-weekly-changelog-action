@@ -1,3 +1,5 @@
+[![CI](https://github.com/fridzema/ai-weekly-changelog-action/actions/workflows/ci.yml/badge.svg)](https://github.com/fridzema/ai-weekly-changelog-action/actions/workflows/ci.yml)
+
 # Weekly Changelog Action
 
 This GitHub Action automatically generates a weekly changelog from your repository's recent commits using an AI model via [OpenRouter](https://openrouter.ai). It summarizes technical changes and their business impact, then commits the update to a `CHANGELOG.md` file.
