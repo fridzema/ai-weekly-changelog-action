@@ -6,6 +6,7 @@ import hashlib
 import os
 import re
 import sys
+import tempfile
 import textwrap
 import time
 from functools import wraps
@@ -372,7 +373,7 @@ def get_chunk_cache_dir() -> str:
     Returns:
         Path to chunk cache directory
     """
-    cache_dir = "/tmp/changelog_cache/chunks/"
+    cache_dir = os.path.join(tempfile.gettempdir(), "changelog_cache", "chunks")
     os.makedirs(cache_dir, exist_ok=True)
     return cache_dir
 
@@ -777,8 +778,16 @@ if __name__ == "__main__":
             extended_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
     # Prompt templates: concise for small commit sets, full for larger ones
-    extended_focus = " - Focus on the most significant changes and their technical implications based on file statistics" if extended_analysis else ""
-    extended_scope = " - Consider the overall scope and significance based on the extent of changes" if extended_analysis else ""
+    extended_focus = (
+        " - Focus on the most significant changes and their technical implications based on file statistics"
+        if extended_analysis
+        else ""
+    )
+    extended_scope = (
+        " - Consider the overall scope and significance based on the extent of changes"
+        if extended_analysis
+        else ""
+    )
 
     if total_commits <= 5:
         # Concise prompts for small commit sets — no empty category filler
@@ -1011,11 +1020,15 @@ Write in a clear, business-focused style with proper markdown formatting.
             commits_text = "\n".join(chunk_commits)
 
             # Check cache first
-            cache_key = get_chunk_cache_key(commits_text, summary_type, model, output_language)
+            cache_key = get_chunk_cache_key(
+                commits_text, summary_type, model, output_language
+            )
             cached_summary = read_chunk_cache(cache_key)
 
             if cached_summary:
-                print(f"   💾 Cache hit for chunk {chunk_idx + 1}/{num_chunks} {description}")
+                print(
+                    f"   💾 Cache hit for chunk {chunk_idx + 1}/{num_chunks} {description}"
+                )
                 cache_hits += 1
                 return (chunk_idx, cached_summary, True)
 
@@ -1030,7 +1043,8 @@ Write in a clear, business-focused style with proper markdown formatting.
                     prompt, description, chunk_number=chunk_idx + 1
                 )
                 # Write to cache
-                write_chunk_cache(cache_key, chunk_summary)
+                if chunk_summary is not None:
+                    write_chunk_cache(cache_key, chunk_summary)
                 print(f"✅ Chunk {chunk_idx + 1}/{num_chunks} {description} completed")
                 return (chunk_idx, chunk_summary, False)
             except Exception as e:
@@ -1043,9 +1057,14 @@ Write in a clear, business-focused style with proper markdown formatting.
 
         # Use ThreadPoolExecutor to process chunks concurrently
         chunk_summaries_dict = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_CHUNKS) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=MAX_CONCURRENT_CHUNKS
+        ) as executor:
             # Submit all chunks
-            futures = [executor.submit(process_chunk, chunk_idx) for chunk_idx in range(num_chunks)]
+            futures = [
+                executor.submit(process_chunk, chunk_idx)
+                for chunk_idx in range(num_chunks)
+            ]
 
             # Collect results maintaining order
             for future in concurrent.futures.as_completed(futures):
@@ -1056,7 +1075,9 @@ Write in a clear, business-focused style with proper markdown formatting.
         chunk_summaries = [chunk_summaries_dict[i] for i in range(num_chunks)]
 
         # Print cache statistics
-        print(f"   📊 Cache: {cache_hits} hits, {cache_misses} misses out of {num_chunks} chunks")
+        print(
+            f"   📊 Cache: {cache_hits} hits, {cache_misses} misses out of {num_chunks} chunks"
+        )
 
         # Merge all chunk summaries
         if len(chunk_summaries) == 1:
@@ -1183,7 +1204,9 @@ Write in a clear, business-focused style with proper markdown formatting.
                 f"- **{files_changed}** {config['files_changed']}",
             ]
             if file_changes_data:
-                stats_parts.extend(["", f"### {config['file_changes']}", file_changes_data])
+                stats_parts.extend(
+                    ["", f"### {config['file_changes']}", file_changes_data]
+                )
             stats_section = "\n".join(stats_parts)
 
         # Create changelog entry with chunking info if applicable
@@ -1194,23 +1217,27 @@ Write in a clear, business-focused style with proper markdown formatting.
         ]
         if chunks_info:
             entry_parts.append(chunks_info.strip())
-        entry_parts.extend([
-            "",
-            f"### {config['tech_changes']}",
-            tech_summary,
-            "",
-            f"### {config['user_impact']}",
-            business_summary,
-        ])
+        entry_parts.extend(
+            [
+                "",
+                f"### {config['tech_changes']}",
+                tech_summary,
+                "",
+                f"### {config['user_impact']}",
+                business_summary,
+            ]
+        )
         if stats_section:
             entry_parts.append(stats_section)
-        entry_parts.extend([
-            "",
-            f"### {config['all_commits']}",
-            commits_links_text,
-            "",
-            "---",
-        ])
+        entry_parts.extend(
+            [
+                "",
+                f"### {config['all_commits']}",
+                commits_links_text,
+                "",
+                "---",
+            ]
+        )
         changelog_entry = "\n".join(entry_parts)
 
         # Prepend new entry to the changelog (after header)

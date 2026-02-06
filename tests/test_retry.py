@@ -193,6 +193,42 @@ def test_retry_with_multiple_error_types():
     assert call_count == 3
 
 
+def test_retry_generic_error_exhaustion_returns_none():
+    """Test that exhausting all retries on generic errors returns None."""
+    call_count = 0
+
+    @retry_api_call(max_retries=3, delay=1)
+    def always_generic_error():
+        nonlocal call_count
+        call_count += 1
+        raise Exception("Some unknown server error")
+
+    with pytest.raises(Exception) as exc_info:
+        always_generic_error()
+
+    assert "unknown server error" in str(exc_info.value)
+    # Should have retried all attempts
+    assert call_count == 3
+
+
+def test_retry_generic_error_final_attempt_guidance(capfd):
+    """Test that final attempt failure prints guidance messages."""
+
+    @retry_api_call(max_retries=2, delay=1)
+    def always_fails():
+        raise Exception("Some persistent error")
+
+    with pytest.raises(Exception) as exc_info:
+        always_fails()
+
+    assert "persistent error" in str(exc_info.value)
+    captured = capfd.readouterr()
+    assert "Final attempt failed" in captured.out
+    assert "Reducing the days_back parameter" in captured.out
+    assert "Using a different model" in captured.out
+    assert "Checking OpenRouter service status" in captured.out
+
+
 def test_retry_preserves_function_name():
     """Test that decorator preserves function name and docstring."""
 

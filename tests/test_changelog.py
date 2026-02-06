@@ -112,6 +112,19 @@ def456|fix: Fix bug|Author2|2024-01-02|def"""
         assert len(formatted) == 0
         assert len(links) == 0
 
+    def test_process_commits_handles_partial_pipe_lines(self, monkeypatch):
+        """Test that commits with | but fewer than 5 parts are handled as raw lines."""
+        monkeypatch.setenv("GITHUB_REPOSITORY", "test-org/test-repo")
+
+        # Line with pipe but fewer than 5 parts
+        commits_raw = "abc123|partial line only"
+
+        formatted, links = process_commits_in_chunks(commits_raw, chunk_size=50)
+
+        assert len(formatted) == 1
+        assert formatted[0] == "• abc123|partial line only"
+        assert links[0] == "- abc123|partial line only"
+
     def test_process_commits_handles_multiple_chunks(self, monkeypatch, capfd):
         """Test that process_commits_in_chunks processes large sets in chunks."""
         monkeypatch.setenv("GITHUB_REPOSITORY", "test-org/test-repo")
