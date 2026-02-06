@@ -1,0 +1,170 @@
+name: Release Changelog
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Determine commit range
+        id: range
+        shell: bash
+        run: |
+          CURRENT_TAG="${{ github.event.release.tag_name }}"
+          echo "current_tag=$CURRENT_TAG" >> "$GITHUB_OUTPUT"
+
+          # Find the previous release tag (exclude 'latest' and the current tag)
+          PREVIOUS_TAG=$(git tag --sort=-version:refname \
+            | grep -v '^latest$' \
+            | grep -v "^${CURRENT_TAG}$" \
+            | head -1)
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+            echo "from_ref=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+            echo "📍 Commit range: ${PREVIOUS_TAG}..${CURRENT_TAG}"
+          else
+            echo "previous_tag=" >> "$GITHUB_OUTPUT"
+            echo "from_ref=" >> "$GITHUB_OUTPUT"
+            echo "⚠️ No previous tag found — will fall back to days_back=30"
+          fi
+
+      - name: Collect commits and file changes
+        id: commits
+        shell: bash
+        run: |
+          FROM_REF="${{ steps.range.outputs.from_ref }}"
+          CURRENT_TAG="${{ steps.range.outputs.current_tag }}"
+          GIT_FILTERS="--no-merges"
+
+          # Determine commit range
+          if [ -n "$FROM_REF" ]; then
+            GIT_LOG_RANGE="${FROM_REF}..${CURRENT_TAG}"
+            echo "📍 Using ref-based commit range: $GIT_LOG_RANGE"
+          else
+            SINCE_DATE=$(date -d "30 days ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+            GIT_LOG_RANGE="--since=$SINCE_DATE"
+            echo "📅 Falling back to date-based collection: commits since $SINCE_DATE"
+          fi
+
+          # Collect basic commits
+          echo "🔍 Collecting commits..."
+          if ! git log $GIT_LOG_RANGE $GIT_FILTERS \
+            --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt; then
+            echo "⚠️ Advanced filters failed, using basic collection"
+            git log $GIT_LOG_RANGE --no-merges \
+              --pretty=format:'%H|%s|%an|%ad|%h' --date=short > commits.txt || true
+          fi
+
+          # Extended analysis data
+          echo "📊 Collecting extended analysis data..."
+          git log $GIT_LOG_RANGE $GIT_FILTERS \
+            --name-status --pretty=format:'COMMIT:%H|%s|%an|%ad|%h' > commits_extended.txt || true
+
+          if [[ -s commits.txt ]]; then
+            COMMIT_COUNT=$(wc -l < commits.txt)
+            echo "✅ Found $COMMIT_COUNT commits"
+            echo "has_commits=true" >> "$GITHUB_OUTPUT"
+            echo "commit_count=$COMMIT_COUNT" >> "$GITHUB_OUTPUT"
+
+            # File change statistics
+            git log $GIT_LOG_RANGE $GIT_FILTERS \
+              --numstat --name-only --pretty=format: | \
+              awk '/^[0-9]/ {add+=$1; del+=$2} /^[^0-9]/ && NF {files[$0]=1} END {for(f in files) print f > "files_changed.txt"; print add+0 > "lines_added.tmp"; print del+0 > "lines_deleted.tmp"}' || true
+
+            LINES_ADDED=$(cat lines_added.tmp 2>/dev/null || echo "0")
+            LINES_DELETED=$(cat lines_deleted.tmp 2>/dev/null || echo "0")
+            FILES_CHANGED=$(wc -l < files_changed.txt 2>/dev/null || echo "0")
+
+            echo "lines_added=$LINES_ADDED" >> "$GITHUB_OUTPUT"
+            echo "lines_deleted=$LINES_DELETED" >> "$GITHUB_OUTPUT"
+            echo "files_changed=$FILES_CHANGED" >> "$GITHUB_OUTPUT"
+            echo "extended_analysis=true" >> "$GITHUB_OUTPUT"
+
+            rm -f lines_added.tmp lines_deleted.tmp
+          else
+            echo "ℹ️ No commits found between tags"
+            echo "has_commits=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.commits.outputs.has_commits == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        if: steps.commits.outputs.has_commits == 'true'
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install "openai>=1.14,<2" requests
+
+      - name: Generate changelog
+        if: steps.commits.outputs.has_commits == 'true'
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MODEL: 'openai/gpt-5-mini'
+          OUTPUT_LANGUAGE: 'English'
+          FORCE_UPDATE: 'true'
+          DRY_RUN: 'false'
+          EXTENDED_ANALYSIS: ${{ steps.commits.outputs.extended_analysis }}
+          LINES_ADDED: ${{ steps.commits.outputs.lines_added }}
+          LINES_DELETED: ${{ steps.commits.outputs.lines_deleted }}
+          FILES_CHANGED: ${{ steps.commits.outputs.files_changed }}
+          DAYS_BACK: '30'
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 src/generate_changelog.py
+
+      - name: Commit changelog to main
+        if: steps.commits.outputs.has_commits == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: |
+            docs: update changelog for release ${{ steps.range.outputs.current_tag }}
+          file_pattern: 'CHANGELOG.md'
+          branch: main
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Job summary
+        shell: bash
+        run: |
+          CURRENT_TAG="${{ steps.range.outputs.current_tag }}"
+          PREVIOUS_TAG="${{ steps.range.outputs.previous_tag }}"
+          HAS_COMMITS="${{ steps.commits.outputs.has_commits }}"
+          COMMIT_COUNT="${{ steps.commits.outputs.commit_count }}"
+
+          echo "## 🏷️ Release Changelog — ${CURRENT_TAG}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "- **Previous tag:** ${PREVIOUS_TAG}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Previous tag:** _(none — used last 30 days)_" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "- **Release tag:** ${CURRENT_TAG}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$HAS_COMMITS" = "true" ]; then
+            echo "- **Commits processed:** ${COMMIT_COUNT}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Changelog has been updated and committed to main. 🎉" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Commits processed:** 0" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No commits found between tags. Changelog was not updated." >> $GITHUB_STEP_SUMMARY
+          fi
