@@ -581,6 +581,7 @@ if __name__ == "__main__":
     5. Is comprehensive and covers all significant changes
     6. Flows naturally as a single document
 
+    Ensure output starts directly with content (no ### level headers). Use #### for sub-sections.
     Use the same structure and formatting as the individual chunks.
     Language: {output_language}
 
@@ -775,104 +776,147 @@ if __name__ == "__main__":
                 )
             extended_context += f"\n\nFile changes summary:\n{file_changes_data}"
 
-    # Technical prompt template with explicit markdown formatting
-    tech_prompt_template = textwrap.dedent(f"""
-    You are a senior software developer writing a technical changelog for a development team.
+    # Prompt templates: concise for small commit sets, full for larger ones
+    extended_focus = " - Focus on the most significant changes and their technical implications based on file statistics" if extended_analysis else ""
+    extended_scope = " - Consider the overall scope and significance based on the extent of changes" if extended_analysis else ""
 
-    Analyze these commits and create a structured technical summary in {output_language}:
+    if total_commits <= 5:
+        # Concise prompts for small commit sets — no empty category filler
+        tech_prompt_template = textwrap.dedent(f"""
+You are a senior software developer writing a technical changelog for a development team.
 
-    {{base_context}}
+Analyze these commits and create a concise technical summary in {output_language}:
 
-    Use this exact format with markdown:
+{{base_context}}
 
-    ### Technical Changelog Summary
-    [Write 1-2 sentence overview of the week's development activity]
+Create a structured technical summary. Start directly with content (no top-level ### header).
 
-    #### Main Changes by Category
+Write a 1-2 sentence overview of the changes, then list each change as a bullet point with specific details about what was changed and why. Use #### headers only if there are multiple distinct categories of changes. Skip categories with no relevant changes.
 
-    **Features:**
-    - [List each new feature added as a bullet point]
-    - [Be specific about what functionality was added]
+Requirements:
+- Start directly with the overview text (no ### header)
+- Use #### for sub-sections only when needed
+- Use bullet lists (-) for all items
+- Be concise — only include relevant categories
+- Provide specific details about what was changed and why
+{extended_focus}
 
-    **Bug Fixes:**
-    - [List each bug fix as a bullet point]
-    - [Mention what issue was resolved]
+Write in a clear, structured format with proper markdown formatting.
+""").strip()
 
-    **Refactoring:**
-    - [List code improvements and restructuring]
-    - [Explain what was cleaned up or optimized]
+        business_prompt_template = textwrap.dedent(f"""
+You are a product manager communicating updates to stakeholders and end users.
 
-    **Infrastructure/DevOps:**
-    - [List build, deployment, and tooling changes]
+Translate these technical commits into business impact in {output_language}:
 
-    **Documentation:**
-    - [List documentation updates]
+{{base_context}}
 
-    **Testing:**
-    - [List test additions and improvements]
+Create a business-focused summary. Start directly with content (no top-level ### header).
 
-    #### Technical Highlights
-    - [Key architectural decisions made]
-    - [Performance improvements implemented]
-    - [Security enhancements added]
-    - [Important technical context about frameworks, libraries, or patterns used]
+Write a 2-3 sentence overview for a non-technical audience, then list key impacts as bullet points. Only include sections that are relevant to the actual changes. Skip sections with no relevant impact.
 
-    Requirements:
-    - Use markdown headers (#### for sections)
-    - Use bold text (**text:**) for category labels
-    - Use bullet lists (-) for all items
-    - Keep it concise but informative with appropriate technical terminology
-    - Provide specific details about what was changed and why
-    {" - Focus on the most significant changes and their technical implications based on file statistics" if extended_analysis else ""}
+Requirements:
+- Start directly with the overview text (no ### header)
+- Use #### for sub-sections only when needed
+- Use bullet lists (-) for all items
+- Avoid technical jargon and implementation details
+- Focus on benefits, outcomes, and user value
+- Be concise — only include relevant sections
+{extended_scope}
 
-    Write in a clear, structured format with proper markdown formatting.
-    """).strip()
+Write in a clear, business-focused style with proper markdown formatting.
+""").strip()
 
-    # Business prompt template with explicit markdown formatting
-    business_prompt_template = textwrap.dedent(f"""
-    You are a product manager communicating updates to stakeholders and end users.
+    else:
+        # Full prompts for larger commit sets
+        tech_prompt_template = textwrap.dedent(f"""
+You are a senior software developer writing a technical changelog for a development team.
 
-    Translate these technical commits into business impact in {output_language}:
+Analyze these commits and create a structured technical summary in {output_language}:
 
-    {{base_context}}
+{{base_context}}
 
-    Use this exact format with markdown:
+Create a structured technical summary. Start directly with content (no top-level ### header):
 
-    ### Summary of Recent Updates
-    [Write 2-3 sentence overview for non-technical audience explaining what was accomplished this week]
+[Write 1-2 sentence overview of the week's development activity]
 
-    #### User Experience Impact
-    - [How these changes affect what users see and experience]
-    - [Specific improvements to interface or interactions]
+#### Main Changes by Category
 
-    #### Business Benefits
-    - [Value delivered to the organization]
-    - [How these changes support business goals]
+**Features:**
+- [List each new feature added as a bullet point]
+- [Be specific about what functionality was added]
 
-    #### Performance & Reliability
-    - [Improvements in system speed or responsiveness]
-    - [Enhanced stability or security]
-    - [Reduced errors or issues]
+**Bug Fixes:**
+- [List each bug fix as a bullet point]
+- [Mention what issue was resolved]
 
-    #### New Capabilities
-    - [New features or functionality now available]
-    - [What users can now do that they couldn't before]
+**Refactoring:**
+- [List code improvements and restructuring]
+- [Explain what was cleaned up or optimized]
 
-    #### Important Changes to Note
-    - [Breaking changes or significant updates users should be aware of]
-    - [Migration steps or actions needed, if any]
+**Infrastructure/DevOps:**
+- [List build, deployment, and tooling changes]
 
-    Requirements:
-    - Use markdown headers (#### for sections)
-    - Use bullet lists (-) for all items
-    - Avoid technical jargon and implementation details
-    - Focus on benefits, outcomes, and user value
-    - Explain the "why" behind changes in business terms
-    - Make it accessible to non-technical stakeholders
-    {" - Consider the overall scope and significance based on the extent of changes" if extended_analysis else ""}
+**Documentation:**
+- [List documentation updates]
 
-    Write in a clear, business-focused style with proper markdown formatting.
-    """).strip()
+**Testing:**
+- [List test additions and improvements]
+
+#### Technical Highlights
+- [Key architectural decisions made]
+- [Performance improvements implemented]
+- [Security enhancements added]
+
+Requirements:
+- Start directly with the overview text (no ### header)
+- Use #### for sub-sections
+- Use bold text (**text:**) for category labels
+- Use bullet lists (-) for all items
+- Skip categories with no relevant changes
+- Provide specific details about what was changed and why
+{extended_focus}
+
+Write in a clear, structured format with proper markdown formatting.
+""").strip()
+
+        business_prompt_template = textwrap.dedent(f"""
+You are a product manager communicating updates to stakeholders and end users.
+
+Translate these technical commits into business impact in {output_language}:
+
+{{base_context}}
+
+Create a business-focused summary. Start directly with content (no top-level ### header):
+
+[Write 2-3 sentence overview for non-technical audience explaining what was accomplished this week]
+
+#### User Experience Impact
+- [How these changes affect what users see and experience]
+
+#### Business Benefits
+- [Value delivered to the organization]
+
+#### Performance & Reliability
+- [Improvements in system speed or responsiveness]
+
+#### New Capabilities
+- [New features or functionality now available]
+
+#### Important Changes to Note
+- [Breaking changes or significant updates users should be aware of]
+
+Requirements:
+- Start directly with the overview text (no ### header)
+- Use #### for sub-sections
+- Use bullet lists (-) for all items
+- Skip sections with no relevant changes
+- Avoid technical jargon and implementation details
+- Focus on benefits, outcomes, and user value
+{extended_scope}
+
+Write in a clear, business-focused style with proper markdown formatting.
+""").strip()
 
     @retry_api_call(max_retries=3, delay=2, timeout=30)
     def generate_summary(prompt, description, chunk_number=None):
@@ -1131,37 +1175,43 @@ if __name__ == "__main__":
             lines_deleted = os.getenv("LINES_DELETED", "0")
             files_changed = os.getenv("FILES_CHANGED", "0")
 
-            stats_section = f"""
-    ### {config["statistics"]}
-    - **{lines_added}** {config["lines_added"]}
-    - **{lines_deleted}** {config["lines_deleted"]}
-    - **{files_changed}** {config["files_changed"]}
-    """
-
+            stats_parts = [
+                "",
+                f"### {config['statistics']}",
+                f"- **{lines_added}** {config['lines_added']}",
+                f"- **{lines_deleted}** {config['lines_deleted']}",
+                f"- **{files_changed}** {config['files_changed']}",
+            ]
             if file_changes_data:
-                stats_section += f"""
-    ### {config["file_changes"]}
-    {file_changes_data}
-    """
+                stats_parts.extend(["", f"### {config['file_changes']}", file_changes_data])
+            stats_section = "\n".join(stats_parts)
 
         # Create changelog entry with chunking info if applicable
-        changelog_entry = textwrap.dedent(f"""
-    {week_header}{force_suffix}
-
-    *{config["generated_on"]} {formatted_date} - {len(commits_formatted)} {config["commits_label"]}*
-    {chunks_info}
-
-    ### {config["tech_changes"]}
-    {tech_summary}
-
-    ### {config["user_impact"]}
-    {business_summary}
-    {stats_section}
-    ### {config["all_commits"]}
-    {commits_links_text}
-
-    ---
-    """).strip()
+        entry_parts = [
+            f"{week_header}{force_suffix}",
+            "",
+            f"*{config['generated_on']} {formatted_date} - {len(commits_formatted)} {config['commits_label']}*",
+        ]
+        if chunks_info:
+            entry_parts.append(chunks_info.strip())
+        entry_parts.extend([
+            "",
+            f"### {config['tech_changes']}",
+            tech_summary,
+            "",
+            f"### {config['user_impact']}",
+            business_summary,
+        ])
+        if stats_section:
+            entry_parts.append(stats_section)
+        entry_parts.extend([
+            "",
+            f"### {config['all_commits']}",
+            commits_links_text,
+            "",
+            "---",
+        ])
+        changelog_entry = "\n".join(entry_parts)
 
         # Prepend new entry to the changelog (after header)
         lines = existing_content.split("\n")
