@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import concurrent.futures
 import datetime
+import hashlib
 import os
 import re
 import sys
@@ -632,6 +634,9 @@ if __name__ == "__main__":
 
     # Intelligent chunking system for large commit sets
     COMMITS_PER_CHUNK = 5  # Small chunks for highly detailed analysis
+    # Limit concurrent chunk processing to avoid rate limiting
+    # Higher = faster but more likely to hit 429 errors; Lower = slower but more reliable
+    MAX_CONCURRENT_CHUNKS = 3
     use_chunking = total_commits > COMMITS_PER_CHUNK
     num_chunks = 0
     chunks_info = ""
@@ -845,9 +850,9 @@ if __name__ == "__main__":
             prompt = prompt_template.format(base_context=base_context)
             return generate_summary(prompt, description)
 
-        # Process in chunks
-        chunk_summaries = []
-        for chunk_idx in range(num_chunks):
+        # Process chunks in parallel with rate-limit-aware concurrency
+        def process_chunk(chunk_idx):
+            """Process a single chunk and return (index, summary)"""
             start_idx = chunk_idx * COMMITS_PER_CHUNK
             end_idx = min(start_idx + COMMITS_PER_CHUNK, total_commits)
             chunk_commits = commits_list[start_idx:end_idx]
@@ -861,16 +866,29 @@ if __name__ == "__main__":
                 chunk_summary = generate_summary(
                     prompt, description, chunk_number=chunk_idx + 1
                 )
-                chunk_summaries.append(chunk_summary)
                 print(f"✅ Chunk {chunk_idx + 1}/{num_chunks} {description} completed")
+                return (chunk_idx, chunk_summary)
             except Exception as e:
                 print(
                     f"⚠️  Warning: Failed to generate {description} for chunk {chunk_idx + 1}: {e}"
                 )
                 # Continue with other chunks even if one fails
-                chunk_summaries.append(
-                    f"[Chunk {chunk_idx + 1} analysis failed - commits {start_idx + 1}-{end_idx} not included in detail]"
-                )
+                fallback = f"[Chunk {chunk_idx + 1} analysis failed - commits {start_idx + 1}-{end_idx} not included in detail]"
+                return (chunk_idx, fallback)
+
+        # Use ThreadPoolExecutor to process chunks concurrently
+        chunk_summaries_dict = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_CHUNKS) as executor:
+            # Submit all chunks
+            futures = [executor.submit(process_chunk, chunk_idx) for chunk_idx in range(num_chunks)]
+
+            # Collect results maintaining order
+            for future in concurrent.futures.as_completed(futures):
+                chunk_idx, chunk_summary = future.result()
+                chunk_summaries_dict[chunk_idx] = chunk_summary
+
+        # Convert dict to ordered list
+        chunk_summaries = [chunk_summaries_dict[i] for i in range(num_chunks)]
 
         # Merge all chunk summaries
         if len(chunk_summaries) == 1:
@@ -883,27 +901,45 @@ if __name__ == "__main__":
             raise Exception(f"No {description} chunks were successfully generated")
 
     # Generate summaries with intelligent chunking and fallback
-    try:
-        tech_summary = generate_chunked_summary(
-            commits_formatted, tech_prompt_template, "technical summary", "technical"
-        )
-        print("✅ Technical summary generated successfully")
-    except Exception as e:
-        print(
-            f"⚠️  Using fallback for technical summary due to: {redact_api_key(str(e))}"
-        )
-        tech_summary = config["fallback_tech"]
+    # Run tech and business summary generation in parallel
+    tech_summary = None
+    business_summary = None
 
-    try:
-        business_summary = generate_chunked_summary(
-            commits_formatted, business_prompt_template, "business summary", "business"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit both summary generation tasks
+        tech_future = executor.submit(
+            generate_chunked_summary,
+            commits_formatted,
+            tech_prompt_template,
+            "technical summary",
+            "technical",
         )
-        print("✅ Business summary generated successfully")
-    except Exception as e:
-        print(
-            f"⚠️  Using fallback for business summary due to: {redact_api_key(str(e))}"
+        business_future = executor.submit(
+            generate_chunked_summary,
+            commits_formatted,
+            business_prompt_template,
+            "business summary",
+            "business",
         )
-        business_summary = config["fallback_business"]
+
+        # Collect results with individual error handling
+        try:
+            tech_summary = tech_future.result()
+            print("✅ Technical summary generated successfully")
+        except Exception as e:
+            print(
+                f"⚠️  Using fallback for technical summary due to: {redact_api_key(str(e))}"
+            )
+            tech_summary = config["fallback_tech"]
+
+        try:
+            business_summary = business_future.result()
+            print("✅ Business summary generated successfully")
+        except Exception as e:
+            print(
+                f"⚠️  Using fallback for business summary due to: {redact_api_key(str(e))}"
+            )
+            business_summary = config["fallback_business"]
 
     # Calculate week and year
     today = datetime.date.today()
