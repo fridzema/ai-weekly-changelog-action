@@ -14,8 +14,8 @@ We recommend always using the latest `v1` tag for security updates.
 If you discover a security vulnerability in this project, please report it responsibly:
 
 1. **Do NOT open a public GitHub issue** for security vulnerabilities
-2. Email: [security@your-domain.com] (replace with your actual contact)
-3. Or use [GitHub Security Advisories](https://github.com/fridzema/ai-weekly-changelog-action/security/advisories/new)
+2. **Use GitHub Security Advisories** (preferred): [Report a vulnerability](https://github.com/fridzema/ai-weekly-changelog-action/security/advisories/new)
+3. Or contact via [GitHub Discussions](https://github.com/fridzema/ai-weekly-changelog-action/discussions) for non-critical security questions
 
 ### What to include
 
