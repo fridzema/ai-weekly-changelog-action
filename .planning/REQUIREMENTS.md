@@ -109,13 +109,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CI-03 | Phase 4 | Complete ✓ |
 | CI-04 | Phase 4 | Complete ✓ |
 | CI-05 | Phase 4 | Complete ✓ |
-| DOC-01 | Phase 5 | Pending |
-| DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
-| DOC-04 | Phase 5 | Pending |
-| DOC-05 | Phase 5 | Pending |
-| DOC-06 | Phase 5 | Pending |
-| DOC-07 | Phase 5 | Pending |
+| DOC-01 | Phase 5 | Complete |
+| DOC-02 | Phase 5 | Complete |
+| DOC-03 | Phase 5 | Complete |
+| DOC-04 | Phase 5 | Complete |
+| DOC-05 | Phase 5 | Complete |
+| DOC-06 | Phase 5 | Complete |
+| DOC-07 | Phase 5 | Complete |
 | FIX-01 | Phase 1 | Complete ✓ |
 | FIX-02 | Phase 1 | Complete ✓ |
 | FIX-03 | Phase 1 | Complete ✓ |
