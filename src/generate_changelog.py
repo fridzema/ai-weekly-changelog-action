@@ -348,7 +348,108 @@ def cleanup_temp_files() -> None:
             print(f"Warning: Could not remove temp file {temp_file}: {e}")
 
 
+def get_chunk_cache_key(
+    chunk_commits_text: str, summary_type: str, model: str, output_language: str
+) -> str:
+    """Generate deterministic cache key for chunk summaries.
+
+    Args:
+        chunk_commits_text: Text of commits in the chunk
+        summary_type: "technical" or "business"
+        model: Model name used for generation
+        output_language: Language for output
+
+    Returns:
+        16-character hex string cache key
+    """
+    content = f"{chunk_commits_text}|{summary_type}|{model}|{output_language}"
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
+def get_chunk_cache_dir() -> str:
+    """Get chunk cache directory path and ensure it exists.
+
+    Returns:
+        Path to chunk cache directory
+    """
+    cache_dir = "/tmp/changelog_cache/chunks/"
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def read_chunk_cache(cache_key: str) -> str | None:
+    """Read cached chunk summary from disk.
+
+    Args:
+        cache_key: Cache key for the chunk
+
+    Returns:
+        Cached content or None if not found/empty
+    """
+    cache_dir = get_chunk_cache_dir()
+    cache_file = os.path.join(cache_dir, f"{cache_key}.txt")
+
+    try:
+        if os.path.exists(cache_file):
+            with open(cache_file, encoding="utf-8") as f:
+                content = f.read().strip()
+                return content if content else None
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"⚠️  Warning: Could not read cache file {cache_key}: {e}")
+
+    return None
+
+
+def write_chunk_cache(cache_key: str, content: str) -> None:
+    """Write chunk summary to cache.
+
+    Args:
+        cache_key: Cache key for the chunk
+        content: Summary content to cache
+    """
+    cache_dir = get_chunk_cache_dir()
+    cache_file = os.path.join(cache_dir, f"{cache_key}.txt")
+
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            f.write(content)
+    except OSError as e:
+        print(f"⚠️  Warning: Could not write cache file {cache_key}: {e}")
+
+
+def cleanup_chunk_cache(max_age_hours: int = 48) -> None:
+    """Remove stale chunk cache files older than max_age_hours.
+
+    Args:
+        max_age_hours: Maximum age in hours before cache files are removed
+    """
+    cache_dir = get_chunk_cache_dir()
+    max_age_seconds = max_age_hours * 3600
+    current_time = time.time()
+    removed_count = 0
+
+    try:
+        for filename in os.listdir(cache_dir):
+            if filename.endswith(".txt"):
+                file_path = os.path.join(cache_dir, filename)
+                try:
+                    file_age = current_time - os.path.getmtime(file_path)
+                    if file_age > max_age_seconds:
+                        os.remove(file_path)
+                        removed_count += 1
+                except OSError:
+                    pass  # Skip files we can't access
+    except OSError:
+        pass  # Directory doesn't exist or can't be read
+
+    if removed_count > 0:
+        print(f"🧹 Cleaned up {removed_count} stale chunk cache files")
+
+
 if __name__ == "__main__":
+    # Clean up old chunk cache files at startup
+    cleanup_chunk_cache(max_age_hours=48)
+
     # Check if API key is present with detailed guidance
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
@@ -850,14 +951,32 @@ if __name__ == "__main__":
             prompt = prompt_template.format(base_context=base_context)
             return generate_summary(prompt, description)
 
+        # Track cache statistics
+        cache_hits = 0
+        cache_misses = 0
+
         # Process chunks in parallel with rate-limit-aware concurrency
         def process_chunk(chunk_idx):
-            """Process a single chunk and return (index, summary)"""
+            """Process a single chunk and return (index, summary, cache_hit)"""
+            nonlocal cache_hits, cache_misses
+
             start_idx = chunk_idx * COMMITS_PER_CHUNK
             end_idx = min(start_idx + COMMITS_PER_CHUNK, total_commits)
             chunk_commits = commits_list[start_idx:end_idx]
 
             commits_text = "\n".join(chunk_commits)
+
+            # Check cache first
+            cache_key = get_chunk_cache_key(commits_text, summary_type, model, output_language)
+            cached_summary = read_chunk_cache(cache_key)
+
+            if cached_summary:
+                print(f"   💾 Cache hit for chunk {chunk_idx + 1}/{num_chunks} {description}")
+                cache_hits += 1
+                return (chunk_idx, cached_summary, True)
+
+            # Cache miss - generate new summary
+            cache_misses += 1
             base_context = f"Commits (chunk {chunk_idx + 1} of {num_chunks}, commits {start_idx + 1}-{end_idx}):\n{commits_text}{extended_context}"
 
             prompt = prompt_template.format(base_context=base_context)
@@ -866,15 +985,17 @@ if __name__ == "__main__":
                 chunk_summary = generate_summary(
                     prompt, description, chunk_number=chunk_idx + 1
                 )
+                # Write to cache
+                write_chunk_cache(cache_key, chunk_summary)
                 print(f"✅ Chunk {chunk_idx + 1}/{num_chunks} {description} completed")
-                return (chunk_idx, chunk_summary)
+                return (chunk_idx, chunk_summary, False)
             except Exception as e:
                 print(
                     f"⚠️  Warning: Failed to generate {description} for chunk {chunk_idx + 1}: {e}"
                 )
                 # Continue with other chunks even if one fails
                 fallback = f"[Chunk {chunk_idx + 1} analysis failed - commits {start_idx + 1}-{end_idx} not included in detail]"
-                return (chunk_idx, fallback)
+                return (chunk_idx, fallback, False)
 
         # Use ThreadPoolExecutor to process chunks concurrently
         chunk_summaries_dict = {}
@@ -884,11 +1005,14 @@ if __name__ == "__main__":
 
             # Collect results maintaining order
             for future in concurrent.futures.as_completed(futures):
-                chunk_idx, chunk_summary = future.result()
+                chunk_idx, chunk_summary, was_cached = future.result()
                 chunk_summaries_dict[chunk_idx] = chunk_summary
 
         # Convert dict to ordered list
         chunk_summaries = [chunk_summaries_dict[i] for i in range(num_chunks)]
+
+        # Print cache statistics
+        print(f"   📊 Cache: {cache_hits} hits, {cache_misses} misses out of {num_chunks} chunks")
 
         # Merge all chunk summaries
         if len(chunk_summaries) == 1:
