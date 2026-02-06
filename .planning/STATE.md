@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** A working example of production-quality open source engineering
-**Current focus:** Phase 4 Complete - Ready for Phase 5 (Documentation Polish)
+**Current focus:** Phase 5 - Documentation Polish (Wave 2 complete)
 
 ## Current Position
 
 Phase: 5 of 5 (Documentation Polish) - IN PROGRESS
-Plan: 2 of 3 complete
-Status: In progress
-Last activity: 2026-02-06 - Completed 05-02-PLAN.md
+Plan: 3 of 3 complete (Wave 2 done)
+Status: Phase complete
+Last activity: 2026-02-06 - Completed 05-03-PLAN.md
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 3.2 min
-- Total execution time: 0.65 hours
+- Total plans completed: 13
+- Average duration: 3.1 min
+- Total execution time: 0.68 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [█████████░] 93%
 | 02 | 5/5 | 24min | 4.8min |
 | 03 | 3/3 | 7.5min | 2.5min |
 | 04 | 1/1 | 1.5min | 1.5min |
-| 05 | 2/3 | 4min | 2min |
+| 05 | 3/3 | 6.5min | 2.2min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (1.5min), 03-02 (2min), 03-03 (4min), 04-01 (1.5min), 05-02 (2min)
-- Trend: Consistent 1.5-2 min for recent plans
+- Last 5 plans: 03-02 (2min), 03-03 (4min), 04-01 (1.5min), 05-02 (2min), 05-03 (2.3min)
+- Trend: Consistent 1.5-2.5 min for recent plans
 
 *Updated after each plan completion*
 
@@ -82,6 +82,9 @@ Recent decisions affecting current work:
 - DOC-02: Include practical metrics in documentation (API call formulas, processing times, costs)
 - DOC-03: Link diagrams to code constants (COMMITS_PER_CHUNK, retry params, token limits)
 - DOC-04: Visual hierarchy with colors and styling in Mermaid diagrams
+- DOC-05: README structure follows research-recommended order (Badges → Features → Quick Start → Examples → Config → Troubleshooting → Architecture → Contributing)
+- DOC-06: Troubleshooting section uses Symptoms → Root Causes → Solutions pattern
+- DOC-07: Architecture overview in README with inline Mermaid + link to detailed docs (progressive disclosure)
 
 ### Phase 1 Complete
 
@@ -145,15 +148,23 @@ All 5 CI requirements completed and verified:
 - type-check: mypy src/
 - security: pip-audit via official action
 
-### Phase 5 In Progress
+### Phase 5 Complete
 
-Plans completed: 2/3
-- 05-01: Research documentation polish domain (2min)
-- 05-02: Create architecture documentation with Mermaid diagrams (2min)
+All 3 plans completed:
+- 05-01: Code of Conduct and Security docs (2min)
+- 05-02: Architecture documentation with Mermaid diagrams (2min)
+- 05-03: README restructure and polish (2.3min)
 
 **Documentation artifacts created:**
+- CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
+- SECURITY.md enhanced with vulnerability reporting
 - docs/ARCHITECTURE.md with 7 Mermaid diagrams
-- Diagrams cover: high-level flow, micro-chunking, data flow, extended mode, error handling, hierarchical merge, multi-language support
+- README.md professionally restructured with:
+  - MIT License badge
+  - Quick Start moved up for immediate access
+  - Enhanced troubleshooting (Symptoms → Causes → Solutions)
+  - Architecture section with inline Mermaid diagram
+  - Cross-links to Security, CoC, and detailed architecture docs
 
 ### Pending Todos
 
@@ -166,5 +177,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 05-02-PLAN.md (Architecture Documentation)
+Stopped at: Completed 05-03-PLAN.md (README Restructure) - Phase 5 complete
 Resume file: None
+
+**Project Status:** All 5 phases complete (13 plans). Ready for final project wrap-up or additional work as needed.
